@@ -1,0 +1,2652 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#FFB88C" />
+<title>Idiot Wolf</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;900&family=Fredoka:wght@600;700&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; height: 100%;
+    background: #2a1810;
+    overflow: hidden;
+    font-family: "Nunito", system-ui, -apple-system, sans-serif;
+    color: #3D2817;
+    -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+  }
+  body {
+    display: flex; align-items: center; justify-content: center;
+    position: fixed; inset: 0;
+  }
+  #stage {
+    position: relative;
+    width: 100vw; height: 100vh;
+    max-width: calc(100vh * (16/9));
+    max-height: calc(100vw * (9/16));
+    background: #FFB88C;
+    overflow: hidden;
+    box-shadow: 0 0 40px rgba(0,0,0,0.4);
+  }
+  canvas#game {
+    display: block; width: 100%; height: 100%;
+    touch-action: none;
+    image-rendering: optimizeQuality;
+  }
+
+  /* === HUD === */
+  #hud {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    font-family: "Nunito", system-ui, sans-serif;
+    font-weight: 900;
+    color: #3D2817;
+    text-shadow: 0 1px 0 rgba(255,255,255,0.4);
+  }
+  #hud .top-left {
+    position: absolute; top: clamp(8px, 1.6vh, 18px); left: clamp(10px, 1.8vw, 22px);
+    background: rgba(255, 227, 179, 0.55);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    padding: 8px 14px;
+    border-radius: 14px;
+    font-size: clamp(12px, 2vh, 18px);
+    letter-spacing: 0.02em;
+    display: flex; gap: clamp(8px, 1.5vw, 18px); align-items: center;
+    line-height: 1;
+    box-shadow: 0 2px 0 rgba(61,40,23,0.12);
+  }
+  #hud .top-left .sep { opacity: 0.4; }
+  #hud .top-right {
+    position: absolute; top: clamp(8px, 1.6vh, 18px); right: clamp(10px, 1.8vw, 22px);
+    display: flex; gap: 10px; align-items: center;
+    pointer-events: auto;
+  }
+  #mute-btn {
+    background: rgba(255, 227, 179, 0.55);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    border: none;
+    width: clamp(36px, 5vh, 44px); height: clamp(36px, 5vh, 44px);
+    border-radius: 50%;
+    font-size: clamp(16px, 2.4vh, 22px);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 0 rgba(61,40,23,0.12);
+    transition: transform 0.1s ease;
+  }
+  #mute-btn:active { transform: scale(0.92); }
+  #powerup-indicator {
+    background: rgba(255, 227, 179, 0.55);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    padding: 8px 12px;
+    border-radius: 14px;
+    display: none;
+    align-items: center;
+    gap: 8px;
+    font-weight: 900;
+    box-shadow: 0 2px 0 rgba(61,40,23,0.12);
+  }
+  #powerup-indicator.active { display: flex; }
+  #powerup-icon { font-size: clamp(18px, 2.6vh, 24px); line-height: 1; }
+  #powerup-bar {
+    width: clamp(60px, 10vw, 90px); height: 8px;
+    background: rgba(61,40,23,0.18);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  #powerup-bar-fill {
+    height: 100%; width: 100%;
+    background: linear-gradient(90deg, #FFB88C, #A04030);
+    transition: width 0.1s linear;
+  }
+
+  /* === Milestone floater === */
+  #milestone {
+    position: absolute;
+    top: 38%; left: 50%;
+    transform: translate(-50%, -50%) scale(0.6);
+    font-family: "Fredoka", "Nunito", system-ui, sans-serif;
+    font-weight: 700;
+    font-size: clamp(22px, 4.5vh, 42px);
+    color: #3D2817;
+    text-shadow: 0 2px 0 rgba(255,255,255,0.5), 0 4px 12px rgba(0,0,0,0.15);
+    background: rgba(255, 227, 179, 0.7);
+    padding: 14px 28px;
+    border-radius: 24px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease, transform 0.3s cubic-bezier(.34,1.56,.64,1);
+    white-space: nowrap;
+  }
+  #milestone.show {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  /* === Touch controls === */
+  #touch-controls {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    display: none;
+  }
+  body.touch #touch-controls { display: block; }
+  .touch-btn {
+    position: absolute;
+    background: rgba(255, 227, 179, 0.4);
+    border: 2px solid rgba(61,40,23,0.25);
+    border-radius: 50%;
+    pointer-events: auto;
+    display: flex; align-items: center; justify-content: center;
+    font-size: clamp(24px, 5vh, 36px);
+    font-weight: 900;
+    color: #3D2817;
+    user-select: none; -webkit-user-select: none;
+    touch-action: none;
+    transition: transform 0.05s ease, background 0.05s ease;
+  }
+  .touch-btn.pressed {
+    background: rgba(255, 227, 179, 0.75);
+    transform: scale(0.92);
+  }
+  #btn-left  { left: clamp(14px, 3vw, 28px); bottom: clamp(14px, 3vh, 28px); width: clamp(64px, 10vh, 92px); height: clamp(64px, 10vh, 92px); }
+  #btn-right { left: calc(clamp(14px, 3vw, 28px) + clamp(64px, 10vh, 92px) + 12px); bottom: clamp(14px, 3vh, 28px); width: clamp(64px, 10vh, 92px); height: clamp(64px, 10vh, 92px); }
+  #btn-jump  { right: clamp(14px, 3vw, 28px); bottom: clamp(14px, 3vh, 28px); width: clamp(84px, 14vh, 120px); height: clamp(84px, 14vh, 120px); }
+
+  /* === Overlays (start / death / pause) === */
+  .overlay {
+    position: absolute; inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center; justify-content: center;
+    text-align: center;
+    padding: 24px;
+    z-index: 10;
+  }
+  .overlay.show { display: flex; }
+
+  #start-screen {
+    background: linear-gradient(180deg, #FFB88C 0%, #FFE3B3 60%, #5BA8A0 100%);
+  }
+  #start-screen .title {
+    font-family: "Fredoka", "Nunito", system-ui, sans-serif;
+    font-weight: 700;
+    font-size: clamp(48px, 12vh, 110px);
+    color: #3D2817;
+    letter-spacing: -0.02em;
+    line-height: 0.95;
+    text-shadow: 0 4px 0 rgba(255,255,255,0.35), 0 8px 24px rgba(0,0,0,0.18);
+    margin-bottom: 8px;
+    transform: rotate(-2deg);
+  }
+  #start-screen .tagline {
+    font-family: "Nunito", system-ui, sans-serif;
+    font-weight: 700;
+    font-size: clamp(14px, 2.4vh, 22px);
+    color: #A04030;
+    margin-bottom: 32px;
+    max-width: 600px;
+    font-style: italic;
+  }
+  .big-btn {
+    font-family: "Fredoka", "Nunito", system-ui, sans-serif;
+    font-weight: 700;
+    font-size: clamp(20px, 3.4vh, 30px);
+    padding: 16px 40px;
+    background: #3D2817;
+    color: #FFE3B3;
+    border: none;
+    border-radius: 999px;
+    cursor: pointer;
+    letter-spacing: 0.04em;
+    box-shadow: 0 6px 0 #2a1810, 0 12px 24px rgba(0,0,0,0.25);
+    transition: transform 0.08s ease, box-shadow 0.08s ease;
+  }
+  .big-btn:active {
+    transform: translateY(4px);
+    box-shadow: 0 2px 0 #2a1810, 0 4px 8px rgba(0,0,0,0.2);
+  }
+  #start-screen .hint {
+    margin-top: 28px;
+    font-size: clamp(11px, 1.8vh, 15px);
+    color: rgba(61,40,23,0.7);
+    font-weight: 700;
+  }
+
+  #death-screen {
+    background: rgba(60, 30, 20, 0.78);
+    color: #FFE3B3;
+  }
+  #death-screen .epitaph {
+    font-family: "Fredoka", "Nunito", system-ui, sans-serif;
+    font-weight: 700;
+    font-size: clamp(28px, 6vh, 56px);
+    color: #FFE3B3;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    margin-bottom: 12px;
+    letter-spacing: -0.01em;
+  }
+  #death-screen .sub-epitaph {
+    font-family: "Nunito", system-ui, sans-serif;
+    font-style: italic;
+    font-weight: 700;
+    font-size: clamp(14px, 2.4vh, 22px);
+    color: #FFB88C;
+    margin-bottom: 24px;
+    max-width: 600px;
+  }
+  #death-screen .stats {
+    font-family: "Nunito", system-ui, sans-serif;
+    font-weight: 900;
+    font-size: clamp(14px, 2.2vh, 20px);
+    color: #FFE3B3;
+    margin-bottom: 32px;
+    display: flex; gap: 18px;
+    flex-wrap: wrap; justify-content: center;
+  }
+  #death-screen .stats .sep { opacity: 0.4; }
+  #death-screen .hint {
+    margin-top: 20px;
+    font-size: clamp(11px, 1.8vh, 14px);
+    color: rgba(255,227,179,0.6);
+    font-weight: 700;
+  }
+
+  #pause-screen {
+    background: rgba(60, 30, 20, 0.55);
+    color: #FFE3B3;
+  }
+  #pause-screen .pause-text {
+    font-family: "Fredoka", "Nunito", system-ui, sans-serif;
+    font-weight: 700;
+    font-size: clamp(40px, 8vh, 80px);
+    color: #FFE3B3;
+    margin-bottom: 24px;
+    letter-spacing: 0.08em;
+  }
+  #pause-screen .hint {
+    margin-top: 18px;
+    font-size: clamp(11px, 1.8vh, 14px);
+    color: rgba(255,227,179,0.6);
+    font-weight: 700;
+  }
+</style>
+</head>
+<body>
+  <div id="stage">
+    <canvas id="game" width="960" height="540"></canvas>
+
+    <div id="hud">
+      <div class="top-left">
+        <span>SCORE <span id="hud-score">0</span></span>
+        <span class="sep">·</span>
+        <span>BEST <span id="hud-best">0</span></span>
+        <span class="sep">·</span>
+        <span>📏 <span id="hud-dist">0</span>m</span>
+      </div>
+      <div class="top-right">
+        <div id="powerup-indicator">
+          <span id="powerup-icon">🐎</span>
+          <div id="powerup-bar"><div id="powerup-bar-fill"></div></div>
+        </div>
+        <button id="mute-btn" aria-label="Mute toggle">🔊</button>
+      </div>
+    </div>
+
+    <div id="milestone"></div>
+
+    <div id="touch-controls">
+      <div id="btn-left" class="touch-btn">◀</div>
+      <div id="btn-right" class="touch-btn">▶</div>
+      <div id="btn-jump" class="touch-btn">⤴</div>
+    </div>
+
+    <div id="start-screen" class="overlay show">
+      <div class="title">idiot wolf</div>
+      <div class="tagline" id="start-tagline">Slack is open. The dread is real.</div>
+      <button class="big-btn" id="start-btn">begin the day</button>
+      <div class="hint" id="start-hint">arrows / WASD to move · space to jump · P to pause</div>
+    </div>
+
+    <div id="death-screen" class="overlay">
+      <div class="epitaph">another day, another battle</div>
+      <div class="sub-epitaph" id="death-sub">you almost had it (you didn't)</div>
+      <div class="stats">
+        <span>Score <span id="death-score">0</span></span>
+        <span class="sep">·</span>
+        <span>Best <span id="death-best">0</span></span>
+        <span class="sep">·</span>
+        <span>📏 <span id="death-dist">0</span>m</span>
+      </div>
+      <button class="big-btn" id="restart-btn">try again</button>
+      <div class="hint">or press R</div>
+    </div>
+
+    <div id="pause-screen" class="overlay">
+      <div class="pause-text">paused</div>
+      <button class="big-btn" id="resume-btn">resume</button>
+      <div class="hint">or press P / Esc · tap anywhere</div>
+    </div>
+  </div>
+
+<script>
+"use strict";
+
+// ============================================================
+// === CONFIG === (all tunables — change here, not in code)
+// ============================================================
+const CONFIG = {
+  // Resolution / world
+  LOGICAL_W: 960,
+  LOGICAL_H: 540,
+  TILE: 48,
+  CHUNK_W: 8,    // tiles
+  CHUNK_H: 11,   // tiles
+  CHUNKS_AHEAD: 3,
+  CHUNKS_BEHIND: 2,
+
+  // Camera
+  CAMERA_FOLLOW_RATIO: 0.35, // player rests at 35% from left
+
+  // Player physics (logical units per second)
+  RUN_SPEED: 288,                 // 6 tiles/sec
+  JUMP_VELOCITY: -800,
+  GRAVITY: 2000,
+  MAX_FALL_SPEED: 1000,
+  JUMP_CUT_FACTOR: 0.5,           // released-early velocity multiplier
+  COYOTE_MS: 80,
+  JUMP_BUFFER_MS: 80,
+  STOMP_BOUNCE_FACTOR: 0.6,
+
+  // Wolf visual + hitbox
+  WOLF_BOX: 48,                   // visual bounding box (one tile)
+  WOLF_HITBOX: { w: 32, h: 40, offsetX: 8, offsetY: 4 },
+  WOLF_RUN_FRAME_MS: 100,         // 10 FPS run cycle
+  WOLF_IDLE_BOB_AMP: 2,
+  WOLF_IDLE_BOB_PERIOD_MS: 1500,
+
+  // Power-up effects
+  INVINCIBILITY_MS: 6000,
+  SPEED_BOOST_MS: 5000,
+  SPEED_BOOST_MULT: 1.7,
+  SPEED_JUMP_MULT: 1.2,
+
+  // Enemy behavior
+  CHASER_DETECT_TILES_X: 8,
+  CHASER_DETECT_TILES_Y: 3,
+  CHASER_SPEED_MULT: 1.3,         // multiplied against RUN_SPEED
+  CHASER_IDLE_BOB_AMP: 3,
+  PUSHER_SPEED: 96,               // 2 tiles/sec
+  PUSHER_PUSH_TILES: 4,           // forceful knockback
+  PUSHER_PUSH_MS: 280,
+  SNAIL_SPEED: 24,                // 0.5 tiles/sec
+  STOMP_TOP_FRACTION: 0.25,       // top 25% counts as stomp zone
+
+  // Collectibles
+  COLLECT_CHECK_VALUE: 1,
+  COLLECT_HEART_VALUE: 10,
+  SNAIL_KILL_VALUE: 5,
+  ENEMY_KILL_VALUES: { snail: 5, pusher: 15, chaser: 25 },
+  COLLECT_BOB_AMP: 3,
+  COLLECT_BOB_PERIOD_MS: 2000,
+
+  // Power-up spawn rules
+  POWERUP_BOB_AMP: 4,
+  POWERUP_BOB_PERIOD_MS: 1400,
+  POWERUP_MIN_CHUNKS_BETWEEN: 6,
+
+  // Background ambient
+  BAT_INTERVAL_MIN_MS: 8000,
+  BAT_INTERVAL_MAX_MS: 20000,
+  BAT_SPEED: 140,                 // logical units/sec
+  BAT_BOB_AMP: 14,
+  BAT_BOB_PERIOD_MS: 1800,
+  RAINBOW_INTERVAL_MIN_MS: 30000,
+  RAINBOW_INTERVAL_MAX_MS: 60000,
+  RAINBOW_FADE_IN_MS: 1000,
+  RAINBOW_HOLD_MS: 8000,
+  RAINBOW_FADE_OUT_MS: 1000,
+  SUN_BOB_AMP: 6,
+  SUN_BOB_PERIOD_MS: 5000,
+
+  // Parallax
+  PARALLAX_FAR: 0.2,
+  PARALLAX_NEAR: 0.5,
+
+  // Difficulty by distance (meters == tiles)
+  DIFFICULTY_BANDS: [
+    { upTo: 300,    weights: { easy: 0.60, medium: 0.30, hard: 0.10 } },
+    { upTo: 800,    weights: { easy: 0.30, medium: 0.50, hard: 0.20 } },
+    { upTo: Infinity, weights: { easy: 0.15, medium: 0.45, hard: 0.40 } },
+  ],
+
+  // Audio
+  SFX_VOLUME: 0.4,
+  MUSIC_VOLUME: 0.15,
+  MAX_CONCURRENT_SFX: 16,
+
+  // Milestones
+  MILESTONES: [
+    { dist: 100,  text: "you're doing great ✅" },
+    { dist: 250,  text: "still here, somehow" },
+    { dist: 500,  text: "halfway through the workday" },
+    { dist: 1000, text: "you're a machine 💖" },
+    { dist: 2000, text: "okay this is concerning" },
+    { dist: 5000, text: "log off. please." },
+  ],
+
+  // Start screen taglines
+  TAGLINES: [
+    "Slack is open. The dread is real.",
+    "Just one more standup.",
+    "You're fine. Probably.",
+    "Inbox: 47 unread. Soul: similar.",
+    "Calendar says 'optional'. It's not.",
+    "You drafted the reply. You didn't send it.",
+  ],
+
+  // Death screen sub-epitaphs
+  DEATH_SUBS: [
+    "you almost had it (you didn't)",
+    "the bat saw everything",
+    "control was always an illusion",
+    "tomorrow we ride again (we don't)",
+    "👾 sends its regards",
+    "this is fine",
+    "the sea took you. she takes us all.",
+    "should've taken the meeting",
+  ],
+
+  // Palette
+  COLORS: {
+    skyTop:        "#FFB88C",
+    skyBottom:     "#FFE3B3",
+    sea:           "#5BA8A0",
+    seaHi:         "#F5E1A4",
+    sandTop:       "#E8C988",
+    sandSide:      "#B89968",
+    sandShadow:    "#9E7E52",
+    platform:      "#8B6F47",
+    platformHi:    "#A88762",
+    textDark:      "#3D2817",
+    textAccent:    "#A04030",
+    wolfBody:      "#8A8580",
+    wolfBlotch:    "#D8D2C5",
+    wolfShadow:    "#5C5853",
+    wolfSnout:     "#6F6B65",
+    wolfPink:      "#E89BA0",
+    rainbowStripes: ["#E04848", "#E89048", "#E8D048", "#5BA458", "#4080C0", "#5040A0", "#9050C0"],
+  },
+
+  // Storage keys
+  STORAGE: {
+    bestScore:    "iw_best_score",
+    bestDistance: "iw_best_distance",
+    runs:         "iw_runs",
+    muted:        "iw_muted",
+  },
+};
+
+// ============================================================
+// === STATE === (single game state object)
+// ============================================================
+const State = {
+  // Top-level flow
+  mode: "start",          // 'start' | 'playing' | 'paused' | 'dead'
+  muted: false,
+
+  // Timing
+  time: 0,                // total ms since game start
+  lastFrameMs: 0,
+
+  // Camera
+  cameraX: 0,             // logical units; left edge of viewport in world coords
+  maxCameraX: 0,          // furthest right the camera has ever been (used to gate forward-only scroll)
+
+  // Player
+  player: null,           // populated by resetGame()
+
+  // World
+  chunks: [],             // array of chunk objects; each: { left, right, tiles, ents }
+  nextChunkLeft: 0,       // tile X at which the next generated chunk starts
+  lastHardWasIndex: -2,   // tracks "no two hard chunks in a row"
+  lastPowerupChunkIdx: -CONFIG.POWERUP_MIN_CHUNKS_BETWEEN,
+  chunkCount: 0,          // total chunks generated this run
+
+  // Active entities (across chunks; chunks own their lists, this is a flat view)
+  enemies: [],
+  collectibles: [],
+  powerups: [],
+
+  // Particles / ephemera
+  pickupPopups: [],       // floating "+1" / "+10" text
+  dustPuffs: [],          // speed-boost dust
+  ghosts: [],             // speed-boost ghost trail
+
+  // Ambient
+  bats: [],
+  rainbow: null,          // { x, y, alpha, phase: 'in'|'hold'|'out', timer }
+  nextBatMs: 0,
+  nextRainbowMs: 0,
+
+  // Score
+  score: 0,
+  collectibleScore: 0,
+  distance: 0,            // in tiles ≈ meters
+  bestScore: 0,
+  bestDistance: 0,
+  runs: 0,
+  milestonesHit: new Set(),
+
+  // Active power-up
+  activePowerup: null,    // { type: 'invincibility'|'speed', timeLeft: ms }
+};
+
+function makePlayer(startTileX, startTileY) {
+  return {
+    x: startTileX * CONFIG.TILE,
+    y: startTileY * CONFIG.TILE,
+    vx: 0,
+    vy: 0,
+    w: CONFIG.WOLF_BOX,
+    h: CONFIG.WOLF_BOX,
+    onGround: false,
+    facing: 1,
+    state: "idle",        // 'idle' | 'run' | 'jumpRise' | 'jumpFall' | 'dying'
+    runFrame: 0,
+    runFrameTimer: 0,
+    coyoteMs: 0,
+    jumpBufferMs: 0,
+    pushedMs: 0,          // active push timer (from 🥸)
+    pushDx: 0,            // per-frame push velocity contribution
+    dyingTimer: 0,
+    dyingSpin: 0,
+  };
+}
+
+// ============================================================
+// === ASSETS === (sprite-swap stub; empty in v1)
+// ============================================================
+const Assets = {
+  loaded: false,            // v1 stays false; sprite swap flips this in future
+  sheets: {},               // future: { wolf: Image, enemies: Image, ... }
+  frames: {},               // future: { wolf_run_0: { sheet, x, y, w, h }, ... }
+  load: async function () { /* no-op in v1 */ },
+};
+
+// ============================================================
+// === AUDIO === (Web Audio API: SFX + ambient music)
+// ============================================================
+const Audio = {
+  ctx: null,
+  sfxGain: null,
+  musicGain: null,
+  active: 0,                  // currently-playing SFX nodes
+  music: { running: false, schedTimer: null, droneNodes: [] },
+
+  ensure() {
+    if (this.ctx) return;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    this.ctx = new AC();
+    this.sfxGain = this.ctx.createGain();
+    this.sfxGain.gain.value = CONFIG.SFX_VOLUME;
+    this.sfxGain.connect(this.ctx.destination);
+    this.musicGain = this.ctx.createGain();
+    this.musicGain.gain.value = CONFIG.MUSIC_VOLUME;
+    this.musicGain.connect(this.ctx.destination);
+    this.applyMute();
+  },
+
+  applyMute() {
+    if (!this.ctx) return;
+    const target = State.muted ? 0 : 1;
+    this.sfxGain.gain.setTargetAtTime(target * CONFIG.SFX_VOLUME, this.ctx.currentTime, 0.01);
+    this.musicGain.gain.setTargetAtTime(target * CONFIG.MUSIC_VOLUME, this.ctx.currentTime, 0.01);
+  },
+
+  // ---------- SFX ----------
+  _envOsc({ type, freqStart, freqEnd, durSec, peakGain = 0.6, attackSec = 0.005 }) {
+    if (!this.ctx || this.active >= CONFIG.MAX_CONCURRENT_SFX) return;
+    this.active++;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    osc.type = type;
+    const g = this.ctx.createGain();
+    osc.frequency.setValueAtTime(freqStart, now);
+    if (freqEnd != null && freqEnd !== freqStart) {
+      osc.frequency.exponentialRampToValueAtTime(Math.max(40, freqEnd), now + durSec);
+    }
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(peakGain, now + attackSec);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + durSec);
+    osc.connect(g).connect(this.sfxGain);
+    osc.start(now);
+    osc.stop(now + durSec + 0.05);
+    osc.onended = () => { this.active = Math.max(0, this.active - 1); };
+  },
+
+  _noiseBurst({ durSec, peakGain = 0.4, lowpassHz = 800 }) {
+    if (!this.ctx || this.active >= CONFIG.MAX_CONCURRENT_SFX) return;
+    this.active++;
+    const sr = this.ctx.sampleRate;
+    const len = Math.max(1, Math.floor(durSec * sr));
+    const buf = this.ctx.createBuffer(1, len, sr);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.value = lowpassHz;
+    const g = this.ctx.createGain();
+    g.gain.value = peakGain;
+    src.connect(filter).connect(g).connect(this.sfxGain);
+    src.start();
+    src.onended = () => { this.active = Math.max(0, this.active - 1); };
+  },
+
+  _arpeggio(freqs, stepSec, type = "sine", peakGain = 0.4) {
+    if (!this.ctx) return;
+    const t0 = this.ctx.currentTime;
+    freqs.forEach((f, i) => {
+      if (this.active >= CONFIG.MAX_CONCURRENT_SFX) return;
+      this.active++;
+      const osc = this.ctx.createOscillator();
+      osc.type = type;
+      osc.frequency.value = f;
+      const g = this.ctx.createGain();
+      const start = t0 + i * stepSec;
+      g.gain.setValueAtTime(0.0001, start);
+      g.gain.exponentialRampToValueAtTime(peakGain, start + 0.005);
+      g.gain.exponentialRampToValueAtTime(0.0001, start + stepSec * 0.95);
+      osc.connect(g).connect(this.sfxGain);
+      osc.start(start);
+      osc.stop(start + stepSec + 0.05);
+      osc.onended = () => { this.active = Math.max(0, this.active - 1); };
+    });
+  },
+
+  play(name) {
+    this.ensure();
+    if (!this.ctx) return;
+    switch (name) {
+      case "jump":
+        this._envOsc({ type: "square", freqStart: 440, freqEnd: 660, durSec: 0.08, peakGain: 0.35 });
+        break;
+      case "land":
+        this._noiseBurst({ durSec: 0.05, peakGain: 0.25, lowpassHz: 400 });
+        break;
+      case "stomp":
+        this._envOsc({ type: "square", freqStart: 600, freqEnd: 200, durSec: 0.12, peakGain: 0.4 });
+        break;
+      case "collect_check":
+        this._envOsc({ type: "sine", freqStart: 800, freqEnd: 800, durSec: 0.06, peakGain: 0.4 });
+        break;
+      case "collect_heart":
+        this._arpeggio([800, 1200], 0.075, "sine", 0.45);
+        break;
+      case "powerup":
+        this._arpeggio([523, 659, 784, 1047], 0.05, "triangle", 0.4);
+        break;
+      case "death":
+        this._envOsc({ type: "square", freqStart: 600, freqEnd: 80, durSec: 0.6, peakGain: 0.45 });
+        break;
+      case "push":
+        this._envOsc({ type: "sine", freqStart: 200, freqEnd: 120, durSec: 0.1, peakGain: 0.45 });
+        break;
+      case "milestone":
+        this._arpeggio([523, 659, 784], 0.12, "triangle", 0.35);
+        break;
+    }
+  },
+
+  // ---------- Music ----------
+  startMusic() {
+    this.ensure();
+    if (!this.ctx || this.music.running) return;
+    this.music.running = true;
+    const ctx = this.ctx;
+
+    // Drone: detuned sines at A2 (110Hz) and E3 (164.81Hz)
+    const drone1 = ctx.createOscillator();
+    drone1.type = "sine"; drone1.frequency.value = 110; drone1.detune.value = -7;
+    const drone2 = ctx.createOscillator();
+    drone2.type = "sine"; drone2.frequency.value = 164.81; drone2.detune.value = +5;
+    const droneG = ctx.createGain();
+    droneG.gain.value = 0.18;
+    drone1.connect(droneG); drone2.connect(droneG); droneG.connect(this.musicGain);
+    drone1.start(); drone2.start();
+    this.music.droneNodes = [drone1, drone2, droneG];
+
+    // Arpeggio scheduler: A major 7 — A3, C#4, E4, G#4
+    const notes = [220.00, 277.18, 329.63, 415.30];
+    let step = 0;
+    const stepSec = 1.3;       // ~46 BPM, slightly more movement than before
+    const sched = () => {
+      if (!this.music.running) return;
+      const t = ctx.currentTime;
+      const f = notes[step % notes.length];
+
+      // Piano-ish fundamental: triangle with very fast attack and long
+      // exponential decay, tiny random detune for lo-fi tape warble.
+      const o1 = ctx.createOscillator();
+      o1.type = "triangle";
+      o1.frequency.value = f;
+      o1.detune.value = (Math.random() - 0.5) * 4; // ±2 cents
+      const g1 = ctx.createGain();
+      g1.gain.setValueAtTime(0.0001, t);
+      g1.gain.linearRampToValueAtTime(0.14, t + 0.006);
+      g1.gain.exponentialRampToValueAtTime(0.0001, t + 2.4);
+      o1.connect(g1).connect(this.musicGain);
+      o1.start(t);
+      o1.stop(t + 2.5);
+
+      // Octave harmonic (sine, lower amp) — adds a touch of piano brightness
+      const o2 = ctx.createOscillator();
+      o2.type = "sine";
+      o2.frequency.value = f * 2;
+      const g2 = ctx.createGain();
+      g2.gain.setValueAtTime(0.0001, t);
+      g2.gain.linearRampToValueAtTime(0.045, t + 0.004);
+      g2.gain.exponentialRampToValueAtTime(0.0001, t + 1.3);
+      o2.connect(g2).connect(this.musicGain);
+      o2.start(t);
+      o2.stop(t + 1.4);
+
+      step++;
+
+      // occasional shimmer (~30% chance per step)
+      if (Math.random() < 0.3) {
+        const sFreq = notes[Math.floor(Math.random() * notes.length)] * 4;
+        const sOsc = ctx.createOscillator();
+        sOsc.type = "sine";
+        sOsc.frequency.value = sFreq;
+        const sG = ctx.createGain();
+        const sStart = t + 0.3 + Math.random() * 0.6;
+        sG.gain.setValueAtTime(0.0001, sStart);
+        sG.gain.exponentialRampToValueAtTime(0.04, sStart + 0.05);
+        sG.gain.exponentialRampToValueAtTime(0.0001, sStart + 1.0);
+        sOsc.connect(sG).connect(this.musicGain);
+        sOsc.start(sStart);
+        sOsc.stop(sStart + 1.2);
+      }
+    };
+    sched();
+    this.music.schedTimer = setInterval(sched, stepSec * 1000);
+  },
+
+  stopMusic() {
+    if (!this.music.running) return;
+    this.music.running = false;
+    if (this.music.schedTimer) clearInterval(this.music.schedTimer);
+    this.music.schedTimer = null;
+    this.music.droneNodes.forEach(n => { try { n.stop && n.stop(); } catch(e) {} try { n.disconnect(); } catch(e) {} });
+    this.music.droneNodes = [];
+  },
+
+  pauseMusic() { this.stopMusic(); },
+  resumeMusic() { this.startMusic(); },
+};
+
+// ============================================================
+// === INPUT === (keyboard + touch)
+// ============================================================
+const Input = {
+  left: false,
+  right: false,
+  jump: false,
+  jumpEdge: false,        // true on the frame jump was first pressed (consumed by physics)
+
+  _bindKeys() {
+    window.addEventListener("keydown", (e) => {
+      if (e.repeat) return;
+      switch (e.code) {
+        case "ArrowLeft":
+        case "KeyA":
+          this.left = true; e.preventDefault(); break;
+        case "ArrowRight":
+        case "KeyD":
+          this.right = true; e.preventDefault(); break;
+        case "ArrowUp":
+        case "KeyW":
+        case "Space":
+          if (!this.jump) this.jumpEdge = true;
+          this.jump = true; e.preventDefault();
+          break;
+        case "KeyP":
+        case "Escape":
+          if (State.mode === "playing") UI.pause();
+          else if (State.mode === "paused") UI.resume();
+          e.preventDefault();
+          break;
+        case "KeyR":
+          if (State.mode === "dead") UI.restart();
+          break;
+      }
+    });
+    window.addEventListener("keyup", (e) => {
+      switch (e.code) {
+        case "ArrowLeft":
+        case "KeyA":
+          this.left = false; break;
+        case "ArrowRight":
+        case "KeyD":
+          this.right = false; break;
+        case "ArrowUp":
+        case "KeyW":
+        case "Space":
+          this.jump = false; break;
+      }
+    });
+  },
+
+  _bindTouch() {
+    // Detect touch availability and tag body
+    const hasTouch = ("ontouchstart" in window) || (navigator.maxTouchPoints > 0);
+    if (hasTouch) document.body.classList.add("touch");
+
+    const bindBtn = (el, onDown, onUp) => {
+      if (!el) return;
+      const down = (e) => { e.preventDefault(); el.classList.add("pressed"); onDown(); };
+      const up   = (e) => { e.preventDefault(); el.classList.remove("pressed"); onUp(); };
+      el.addEventListener("touchstart", down, { passive: false });
+      el.addEventListener("touchend",   up,   { passive: false });
+      el.addEventListener("touchcancel",up,   { passive: false });
+      // Also handle mouse for desktop debugging of touch UI
+      el.addEventListener("mousedown",  down);
+      el.addEventListener("mouseup",    up);
+      el.addEventListener("mouseleave", up);
+    };
+
+    bindBtn(document.getElementById("btn-left"),
+      () => { this.left = true; },
+      () => { this.left = false; });
+    bindBtn(document.getElementById("btn-right"),
+      () => { this.right = true; },
+      () => { this.right = false; });
+    bindBtn(document.getElementById("btn-jump"),
+      () => { if (!this.jump) this.jumpEdge = true; this.jump = true; },
+      () => { this.jump = false; });
+
+    // Suppress context menu on long-press on canvas
+    const canvas = document.getElementById("game");
+    canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+    // Stop double-tap zoom on the stage
+    document.getElementById("stage").addEventListener("touchmove", (e) => e.preventDefault(), { passive: false });
+  },
+
+  consumeJumpEdge() {
+    const v = this.jumpEdge;
+    this.jumpEdge = false;
+    return v;
+  },
+
+  reset() {
+    this.left = this.right = this.jump = this.jumpEdge = false;
+  },
+
+  init() {
+    this._bindKeys();
+    this._bindTouch();
+  },
+};
+
+// ============================================================
+// === WORLD === (chunk patterns, generation, tile lookup)
+// ============================================================
+// ---------- Chunk pattern library ----------
+// Legend: . empty   # ground   = platform   c ✅   H 💖   s 🐌   p 🥸   x 👾   h 🐎   b ✨
+// Every pattern is 11 rows × 8 cols.
+
+const PATTERNS = {
+  start: { difficulty: "easy", grid: [
+    "........",
+    "........",
+    "........",
+    "........",
+    "........",
+    "........",
+    "....c...",
+    "........",
+    "........",
+    "########",
+    "########",
+  ] },
+  p1: { difficulty: "easy", grid: [
+    "........",
+    "........",
+    "........",
+    "........",
+    "........",
+    ".c....c.",
+    "........",
+    "..c..c..",
+    "........",
+    "########",
+    "########",
+  ] },
+  p2: { difficulty: "easy", grid: [
+    "........",
+    "........",
+    "........",
+    "........",
+    "........",
+    ".c...c..",
+    "........",
+    "....c...",
+    ".s.....p",
+    "########",
+    "########",
+  ] },
+  p3: { difficulty: "medium", grid: [
+    "........",
+    "........",
+    "........",
+    "........",
+    "........",
+    "....c...",
+    "..c...c.",
+    "........",
+    ".c....c.",
+    "####..##",
+    "####..##",
+  ] },
+  p4: { difficulty: "medium", grid: [
+    "........",
+    "........",
+    "........",
+    "........",
+    "........",
+    ".c.c.c..",
+    "........",
+    "........",
+    "..p..x..",
+    "########",
+    "########",
+  ] },
+  p5: { difficulty: "medium", grid: [
+    "........",
+    "........",
+    "......c.",
+    "......==",
+    "....c...",
+    "....==..",
+    "..c.....",
+    "..==....",
+    "c.......",
+    "########",
+    "########",
+  ] },
+  p6: { difficulty: "hard", grid: [
+    "........",
+    "........",
+    "........",
+    "........",
+    "........",
+    "..c...c.",
+    "........",
+    "........",
+    "..x..x..",
+    "###..###",
+    "###..###",
+  ] },
+  p7: { difficulty: "hard", grid: [
+    "........",
+    "........",
+    "........",
+    "........",
+    "........",
+    "....H...",
+    ".c....c.",
+    "........",
+    "........",
+    "##..##.#",
+    "##..##.#",
+  ] },
+  p8: { difficulty: "hard", grid: [
+    "........",
+    "........",
+    "........",
+    "........",
+    "........",
+    ".....H..",
+    "..c..c..",
+    "........",
+    ".s....x.",
+    "##.##.##",
+    "##.##.##",
+  ] },
+  p9: { difficulty: "easy", grid: [
+    "........",
+    "........",
+    "........",
+    "........",
+    "........",
+    "........",
+    "...h....",
+    "...==...",
+    ".c....c.",
+    "########",
+    "########",
+  ] },
+  p10: { difficulty: "medium", grid: [
+    "........",
+    "........",
+    "........",
+    "........",
+    "........",
+    "..b.....",
+    ".c....c.",
+    "........",
+    ".s....p.",
+    "###..###",
+    "###..###",
+  ] },
+};
+
+const PATTERN_KEYS = {
+  easy:   ["p1", "p2", "p9"],
+  medium: ["p3", "p4", "p5", "p10"],
+  hard:   ["p6", "p7", "p8"],
+};
+
+const POWERUP_CHUNK_KEYS = new Set(["p9", "p10"]);
+
+// ---------- World object ----------
+const World = {
+  getDifficultyWeights() {
+    const d = State.distance;
+    for (const band of CONFIG.DIFFICULTY_BANDS) {
+      if (d <= band.upTo) return band.weights;
+    }
+    return CONFIG.DIFFICULTY_BANDS[CONFIG.DIFFICULTY_BANDS.length - 1].weights;
+  },
+
+  pickDifficulty(weights) {
+    const r = Math.random();
+    let acc = 0;
+    for (const k of ["easy", "medium", "hard"]) {
+      acc += weights[k] || 0;
+      if (r < acc) return k;
+    }
+    return "easy";
+  },
+
+  pickPatternKey() {
+    const idx = State.chunkCount;
+    // First chunk: dedicated start
+    if (idx === 0) return "start";
+    // First 3 chunks (after start) are easy
+    if (idx <= 3) {
+      const pool = PATTERN_KEYS.easy;
+      return pool[Math.floor(Math.random() * pool.length)];
+    }
+
+    const weights = this.getDifficultyWeights();
+    let diff = this.pickDifficulty(weights);
+
+    // No two hard in a row
+    if (diff === "hard" && idx - State.lastHardWasIndex < 2) {
+      diff = Math.random() < 0.5 ? "easy" : "medium";
+    }
+
+    let pool = PATTERN_KEYS[diff].slice();
+    // Power-up chunk cooldown
+    if (idx - State.lastPowerupChunkIdx < CONFIG.POWERUP_MIN_CHUNKS_BETWEEN) {
+      pool = pool.filter(k => !POWERUP_CHUNK_KEYS.has(k));
+      if (pool.length === 0) pool = PATTERN_KEYS[diff];
+    }
+    return pool[Math.floor(Math.random() * pool.length)];
+  },
+
+  // Parse a chunk pattern at world tile X = leftTileX. Returns chunk object.
+  buildChunk(patternKey, leftTileX) {
+    const pat = PATTERNS[patternKey];
+    const grid = pat.grid;
+    const tiles = [];
+    const ents = [];
+    for (let row = 0; row < CONFIG.CHUNK_H; row++) {
+      tiles[row] = [];
+      const line = grid[row] || "........";
+      for (let col = 0; col < CONFIG.CHUNK_W; col++) {
+        const ch = line[col] || ".";
+        const worldTX = leftTileX + col;
+        const worldTY = row;
+        const wx = worldTX * CONFIG.TILE;
+        const wy = worldTY * CONFIG.TILE;
+        let tile = null;
+        switch (ch) {
+          case "#": tile = "ground"; break;
+          case "=": tile = "platform"; break;
+          case "c": ents.push(makeCollectible("check", wx, wy)); break;
+          case "H": ents.push(makeCollectible("heart", wx, wy)); break;
+          case "s": ents.push(makeEnemySnail(wx, wy, leftTileX, leftTileX + CONFIG.CHUNK_W)); break;
+          case "p": ents.push(makeEnemyPusher(wx, wy, leftTileX, leftTileX + CONFIG.CHUNK_W)); break;
+          case "x": ents.push(makeEnemyChaser(wx, wy, leftTileX, leftTileX + CONFIG.CHUNK_W)); break;
+          case "h": ents.push(makePowerup("invincibility", wx, wy)); break;
+          case "b": ents.push(makePowerup("speed", wx, wy)); break;
+        }
+        tiles[row][col] = tile;
+      }
+    }
+    // Settle enemies: each enemy walks down to the nearest floor below its spawn
+    // and gets its patrol bounds set to the contiguous floor extent under it.
+    // Enemies with no floor below them get dropped (not spawned).
+    for (let i = ents.length - 1; i >= 0; i--) {
+      const e = ents[i];
+      if (e.kind !== "enemy") continue;
+      const tx = Math.floor((e.x + e.w / 2) / CONFIG.TILE);
+      const col = tx - leftTileX;
+      if (col < 0 || col >= CONFIG.CHUNK_W) { ents.splice(i, 1); continue; }
+      const startRow = Math.floor(e.y / CONFIG.TILE);
+      let landed = false;
+      for (let row = startRow + 1; row < CONFIG.CHUNK_H; row++) {
+        const t = tiles[row][col];
+        if (t === "ground" || t === "platform") {
+          e.y = (row - 1) * CONFIG.TILE;
+          // Walk left and right along this floor row to find the contiguous extent
+          let leftB = col, rightB = col;
+          while (leftB > 0) {
+            const lt = tiles[row][leftB - 1];
+            if (lt === "ground" || lt === "platform") leftB--; else break;
+          }
+          while (rightB < CONFIG.CHUNK_W - 1) {
+            const rt = tiles[row][rightB + 1];
+            if (rt === "ground" || rt === "platform") rightB++; else break;
+          }
+          e.chunkL = leftTileX + leftB;
+          e.chunkR = leftTileX + rightB + 1; // exclusive
+          landed = true;
+          break;
+        }
+      }
+      if (!landed) ents.splice(i, 1);
+    }
+    return {
+      idx: State.chunkCount,
+      patternKey,
+      difficulty: pat.difficulty,
+      left: leftTileX,
+      right: leftTileX + CONFIG.CHUNK_W,
+      tiles,
+      ents,
+    };
+  },
+
+  generateChunk() {
+    const key = this.pickPatternKey();
+    const chunk = this.buildChunk(key, State.nextChunkLeft);
+    State.chunks.push(chunk);
+    State.nextChunkLeft += CONFIG.CHUNK_W;
+    if (chunk.difficulty === "hard") State.lastHardWasIndex = chunk.idx;
+    if (POWERUP_CHUNK_KEYS.has(key)) State.lastPowerupChunkIdx = chunk.idx;
+    State.chunkCount++;
+    // Register entities into the flat lookup arrays
+    for (const e of chunk.ents) {
+      if (e.kind === "enemy") State.enemies.push(e);
+      else if (e.kind === "collectible") State.collectibles.push(e);
+      else if (e.kind === "powerup") State.powerups.push(e);
+    }
+    return chunk;
+  },
+
+  ensureAhead() {
+    // Generate chunks until we have CHUNKS_AHEAD beyond the right edge of the camera.
+    const cameraRightTile = Math.ceil((State.cameraX + CONFIG.LOGICAL_W) / CONFIG.TILE);
+    while (State.nextChunkLeft < cameraRightTile + CONFIG.CHUNKS_AHEAD * CONFIG.CHUNK_W) {
+      this.generateChunk();
+    }
+  },
+
+  cullBehind() {
+    const cameraLeftTile = Math.floor(State.cameraX / CONFIG.TILE);
+    const cutoff = cameraLeftTile - CONFIG.CHUNKS_BEHIND * CONFIG.CHUNK_W;
+    while (State.chunks.length > 0 && State.chunks[0].right < cutoff) {
+      const dead = State.chunks.shift();
+      // Remove its entities from flat lookups (filter by chunk membership)
+      State.enemies      = State.enemies.filter(e      => !dead.ents.includes(e));
+      State.collectibles = State.collectibles.filter(c => !dead.ents.includes(c));
+      State.powerups     = State.powerups.filter(p     => !dead.ents.includes(p));
+    }
+  },
+
+  // Tile lookup by world tile coords. Returns 'ground' | 'platform' | null.
+  tileAt(tileX, tileY) {
+    if (tileY < 0 || tileY >= CONFIG.CHUNK_H) return null;
+    // Binary-ish: chunks are contiguous and sorted; linear scan is fine.
+    for (let i = 0; i < State.chunks.length; i++) {
+      const c = State.chunks[i];
+      if (tileX >= c.left && tileX < c.right) {
+        return c.tiles[tileY][tileX - c.left];
+      }
+    }
+    return null;
+  },
+
+  isSolid(tileX, tileY) {
+    const t = this.tileAt(tileX, tileY);
+    return t === "ground" || t === "platform";
+  },
+};
+
+// ============================================================
+// === PHYSICS === (gravity, collision, stomp detection)
+// ============================================================
+const Physics = {
+  // Returns the player's hitbox rect in world coords
+  playerHitbox(p) {
+    const hb = CONFIG.WOLF_HITBOX;
+    return { x: p.x + hb.offsetX, y: p.y + hb.offsetY, w: hb.w, h: hb.h };
+  },
+
+  // Generic rect overlap
+  rectsOverlap(a, b) {
+    return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+  },
+
+  // Resolve X then Y movement of a 1-tile-tall hitbox against the tile grid.
+  // Updates player position, velocity, and onGround flag.
+  resolvePlayer(p, dt) {
+    // ---- X axis ----
+    p.x += p.vx * dt;
+    {
+      const hb = this.playerHitbox(p);
+      const minTX = Math.floor(hb.x / CONFIG.TILE);
+      const maxTX = Math.floor((hb.x + hb.w - 1) / CONFIG.TILE);
+      const minTY = Math.floor(hb.y / CONFIG.TILE);
+      const maxTY = Math.floor((hb.y + hb.h - 1) / CONFIG.TILE);
+      for (let ty = minTY; ty <= maxTY; ty++) {
+        for (let tx = minTX; tx <= maxTX; tx++) {
+          if (!World.isSolid(tx, ty)) continue;
+          const tileLeft = tx * CONFIG.TILE;
+          const tileRight = tileLeft + CONFIG.TILE;
+          if (p.vx > 0) {
+            p.x = tileLeft - CONFIG.WOLF_HITBOX.offsetX - CONFIG.WOLF_HITBOX.w;
+            p.vx = 0;
+          } else if (p.vx < 0) {
+            p.x = tileRight - CONFIG.WOLF_HITBOX.offsetX;
+            p.vx = 0;
+          }
+        }
+      }
+    }
+
+    // ---- Y axis ----
+    p.vy += CONFIG.GRAVITY * dt;
+    if (p.vy > CONFIG.MAX_FALL_SPEED) p.vy = CONFIG.MAX_FALL_SPEED;
+    p.y += p.vy * dt;
+    let landed = false;
+    {
+      const hb = this.playerHitbox(p);
+      const minTX = Math.floor(hb.x / CONFIG.TILE);
+      const maxTX = Math.floor((hb.x + hb.w - 1) / CONFIG.TILE);
+      const minTY = Math.floor(hb.y / CONFIG.TILE);
+      const maxTY = Math.floor((hb.y + hb.h - 1) / CONFIG.TILE);
+      for (let ty = minTY; ty <= maxTY; ty++) {
+        for (let tx = minTX; tx <= maxTX; tx++) {
+          if (!World.isSolid(tx, ty)) continue;
+          const tileTop = ty * CONFIG.TILE;
+          const tileBottom = tileTop + CONFIG.TILE;
+          if (p.vy > 0) {
+            p.y = tileTop - CONFIG.WOLF_HITBOX.offsetY - CONFIG.WOLF_HITBOX.h;
+            if (p.vy > 320) landed = true; // "hard landing" sound threshold
+            p.vy = 0;
+            p.onGround = true;
+          } else if (p.vy < 0) {
+            p.y = tileBottom - CONFIG.WOLF_HITBOX.offsetY;
+            p.vy = 0;
+          }
+        }
+      }
+    }
+    return landed;
+  },
+
+  // Falling below world is death
+  fellInPit(p) {
+    return p.y > CONFIG.CHUNK_H * CONFIG.TILE + 80;
+  },
+
+  // Stomp test: player falling AND player's bottom overlaps the top fraction of the enemy
+  isStomp(p, e) {
+    if (p.vy <= 0) return false;
+    const hb = this.playerHitbox(p);
+    const playerBottom = hb.y + hb.h;
+    const enemyTop = e.y;
+    const stompZone = e.h * CONFIG.STOMP_TOP_FRACTION;
+    return playerBottom >= enemyTop && playerBottom <= enemyTop + stompZone + 8;
+  },
+
+  // Used by enemy patrol logic: would the next step at this position walk off solid ground?
+  // Returns true if there is NO solid tile directly under (probeX, probeY+1 tile).
+  edgeAhead(probeX, probeY) {
+    const tx = Math.floor(probeX / CONFIG.TILE);
+    const tyUnder = Math.floor((probeY + CONFIG.TILE) / CONFIG.TILE);
+    return !World.isSolid(tx, tyUnder);
+  },
+};
+
+// ============================================================
+// === ENTITIES === (player + enemies + collectibles + powerups update)
+// ============================================================
+// ---------- Entity constructors ----------
+
+function makeCollectible(type, wx, wy) {
+  return {
+    kind: "collectible",
+    type, // 'check' | 'heart'
+    x: wx + CONFIG.TILE / 2,
+    y: wy + CONFIG.TILE / 2,
+    w: 32, h: 32,
+    bobT: Math.random() * Math.PI * 2,
+    collected: false,
+  };
+}
+
+function makePowerup(type, wx, wy) {
+  return {
+    kind: "powerup",
+    type, // 'invincibility' | 'speed'
+    x: wx + CONFIG.TILE / 2,
+    y: wy + CONFIG.TILE / 2,
+    w: 40, h: 40,
+    bobT: Math.random() * Math.PI * 2,
+    collected: false,
+  };
+}
+
+function makeEnemySnail(wx, wy, chunkL, chunkR) {
+  return {
+    kind: "enemy", type: "snail",
+    x: wx, y: wy,
+    w: CONFIG.TILE, h: CONFIG.TILE,
+    vx: -CONFIG.SNAIL_SPEED,
+    facing: -1,
+    chunkL, chunkR,
+    dead: false,
+    squishT: 0,
+    bobT: Math.random() * Math.PI * 2,
+  };
+}
+
+function makeEnemyPusher(wx, wy, chunkL, chunkR) {
+  return {
+    kind: "enemy", type: "pusher",
+    x: wx, y: wy,
+    w: CONFIG.TILE, h: CONFIG.TILE,
+    vx: CONFIG.PUSHER_SPEED,
+    facing: 1,
+    chunkL, chunkR,
+    dead: false,
+    squishT: 0,
+    bobT: Math.random() * Math.PI * 2,
+  };
+}
+
+function makeEnemyChaser(wx, wy, chunkL, chunkR) {
+  return {
+    kind: "enemy", type: "chaser",
+    x: wx, y: wy,
+    w: CONFIG.TILE, h: CONFIG.TILE,
+    vx: 0,
+    facing: -1,
+    chunkL, chunkR,
+    chasing: false,
+    dead: false,
+    squishT: 0,
+    bobT: Math.random() * Math.PI * 2,
+  };
+}
+
+// ---------- Update functions ----------
+
+const Entities = {
+  updatePlayer(dt) {
+    const p = State.player;
+
+    // Dying: spin and fall freely, then transition to dead screen
+    if (p.state === "dying") {
+      p.vy += CONFIG.GRAVITY * dt;
+      if (p.vy > CONFIG.MAX_FALL_SPEED) p.vy = CONFIG.MAX_FALL_SPEED;
+      p.y += p.vy * dt;
+      p.dyingSpin += dt * 6;
+      p.dyingTimer -= dt * 1000;
+      if (p.dyingTimer <= 0) UI.gameOver();
+      return;
+    }
+
+    // Input → velocity
+    const speedMult = (State.activePowerup && State.activePowerup.type === "speed") ? CONFIG.SPEED_BOOST_MULT : 1;
+    const jumpMult  = (State.activePowerup && State.activePowerup.type === "speed") ? CONFIG.SPEED_JUMP_MULT : 1;
+    let vx = 0;
+    if (Input.left)  vx -= CONFIG.RUN_SPEED * speedMult;
+    if (Input.right) vx += CONFIG.RUN_SPEED * speedMult;
+    p.vx = vx;
+    if (vx > 0) p.facing = 1;
+    else if (vx < 0) p.facing = -1;
+
+    // Pusher push contribution (decays linearly)
+    if (p.pushedMs > 0) {
+      p.vx += p.pushDx;
+      p.pushedMs -= dt * 1000;
+      if (p.pushedMs <= 0) { p.pushedMs = 0; p.pushDx = 0; }
+    }
+
+    // Jump buffer
+    if (Input.consumeJumpEdge()) p.jumpBufferMs = CONFIG.JUMP_BUFFER_MS;
+
+    // Coyote
+    if (p.onGround) p.coyoteMs = CONFIG.COYOTE_MS;
+    else            p.coyoteMs = Math.max(0, p.coyoteMs - dt * 1000);
+
+    // Trigger jump if buffered and we can
+    if (p.jumpBufferMs > 0 && (p.onGround || p.coyoteMs > 0)) {
+      p.vy = CONFIG.JUMP_VELOCITY * jumpMult;
+      p.onGround = false;
+      p.coyoteMs = 0;
+      p.jumpBufferMs = 0;
+      Audio.play("jump");
+    }
+    p.jumpBufferMs = Math.max(0, p.jumpBufferMs - dt * 1000);
+
+    // Variable jump height (release early → cut velocity)
+    if (!Input.jump && p.vy < 0) {
+      p.vy *= 1 - (1 - CONFIG.JUMP_CUT_FACTOR) * Math.min(1, dt * 60);
+    }
+
+    // Pre-physics: assume airborne until resolution proves otherwise
+    p.onGround = false;
+    const landed = Physics.resolvePlayer(p, dt);
+    if (landed) Audio.play("land");
+
+    // Pit death
+    if (Physics.fellInPit(p)) {
+      this.killPlayer();
+      return;
+    }
+
+    // Determine animation state
+    if (!p.onGround) {
+      p.state = p.vy < 0 ? "jumpRise" : "jumpFall";
+    } else if (Math.abs(p.vx) > 1) {
+      p.state = "run";
+    } else {
+      p.state = "idle";
+    }
+
+    // Advance run frame
+    if (p.state === "run") {
+      const frameMs = CONFIG.WOLF_RUN_FRAME_MS / (speedMult > 1 ? 1.7 : 1);
+      p.runFrameTimer += dt * 1000;
+      while (p.runFrameTimer >= frameMs) {
+        p.runFrameTimer -= frameMs;
+        p.runFrame = (p.runFrame + 1) % 3;
+      }
+    } else {
+      p.runFrame = 0;
+      p.runFrameTimer = 0;
+    }
+
+    // Speed-boost trail spawn
+    if (speedMult > 1 && Math.random() < dt * 10) {
+      State.dustPuffs.push({ x: p.x + 24, y: p.y + 40, t: 0, life: 500 });
+    }
+    if (speedMult > 1) {
+      State.ghosts.push({ x: p.x, y: p.y, facing: p.facing, frame: p.runFrame, state: p.state, t: 0, life: 180 });
+      if (State.ghosts.length > 6) State.ghosts.shift();
+    }
+
+    // Active powerup countdown
+    if (State.activePowerup) {
+      State.activePowerup.timeLeft -= dt * 1000;
+      if (State.activePowerup.timeLeft <= 0) State.activePowerup = null;
+    }
+
+    // Score (distance)
+    const dt_distance = Math.max(0, Math.floor(p.x / CONFIG.TILE));
+    if (dt_distance > State.distance) {
+      State.distance = dt_distance;
+      this.checkMilestones();
+    }
+  },
+
+  killPlayer() {
+    const p = State.player;
+    if (p.state === "dying") return;
+    p.state = "dying";
+    p.vy = -400;
+    p.dyingTimer = 1200;
+    p.dyingSpin = 0;
+    Audio.play("death");
+  },
+
+  killEnemyWithPoints(e) {
+    e.dead = true;
+    const value = CONFIG.ENEMY_KILL_VALUES[e.type] || 0;
+    if (value > 0) {
+      State.collectibleScore += value;
+      State.pickupPopups.push({
+        x: e.x + e.w / 2,
+        y: e.y,
+        text: "+" + value,
+        t: 0,
+        life: 700,
+      });
+    }
+    Audio.play("stomp");
+  },
+
+  checkMilestones() {
+    for (const m of CONFIG.MILESTONES) {
+      if (State.distance >= m.dist && !State.milestonesHit.has(m.dist)) {
+        State.milestonesHit.add(m.dist);
+        UI.showMilestone(m.text);
+        Audio.play("milestone");
+      }
+    }
+  },
+
+  updateEnemies(dt) {
+    for (const e of State.enemies) {
+      if (e.dead) {
+        e.squishT += dt * 1000;
+        continue;
+      }
+      e.bobT += dt;
+
+      if (e.type === "snail" || e.type === "pusher") {
+        // Patrol; turn at edges or chunk bounds
+        const speed = e.type === "snail" ? CONFIG.SNAIL_SPEED : CONFIG.PUSHER_SPEED;
+        e.vx = e.facing * speed;
+        const nextX = e.x + e.vx * dt;
+        const probeX = e.facing > 0 ? nextX + e.w - 1 : nextX;
+        const turnedByEdge = Physics.edgeAhead(probeX, e.y);
+        const turnedByWall = World.isSolid(Math.floor(probeX / CONFIG.TILE), Math.floor((e.y + e.h - 8) / CONFIG.TILE));
+        const turnedByChunk = (e.facing > 0 && nextX + e.w > e.chunkR * CONFIG.TILE) ||
+                              (e.facing < 0 && nextX < e.chunkL * CONFIG.TILE);
+        if (turnedByEdge || turnedByWall || turnedByChunk) {
+          e.facing *= -1;
+        } else {
+          e.x = nextX;
+        }
+      } else if (e.type === "chaser") {
+        // Detect player
+        const p = State.player;
+        const dxTiles = (p.x - e.x) / CONFIG.TILE;
+        const dyTiles = (p.y - e.y) / CONFIG.TILE;
+        const inRange = Math.abs(dxTiles) <= CONFIG.CHASER_DETECT_TILES_X &&
+                        Math.abs(dyTiles) <= CONFIG.CHASER_DETECT_TILES_Y;
+        e.chasing = inRange && p.state !== "dying";
+        if (e.chasing) {
+          e.facing = (p.x > e.x) ? 1 : -1;
+          const speed = CONFIG.RUN_SPEED * CONFIG.CHASER_SPEED_MULT;
+          const nextX = e.x + e.facing * speed * dt;
+          const probeX = e.facing > 0 ? nextX + e.w - 1 : nextX;
+          const turnedByEdge = Physics.edgeAhead(probeX, e.y);
+          const turnedByWall = World.isSolid(Math.floor(probeX / CONFIG.TILE), Math.floor((e.y + e.h - 8) / CONFIG.TILE));
+          const turnedByChunk = (e.facing > 0 && nextX + e.w > e.chunkR * CONFIG.TILE) ||
+                                (e.facing < 0 && nextX < e.chunkL * CONFIG.TILE);
+          if (!turnedByEdge && !turnedByWall && !turnedByChunk) e.x = nextX;
+          // else: stuck at edge, doesn't move (player will have to step closer)
+        }
+      }
+    }
+    // Sweep dead enemies after 200ms squish
+    State.enemies = State.enemies.filter(e => !e.dead || e.squishT < 220);
+  },
+
+  updateCollectiblesAndPowerups(dt) {
+    for (const c of State.collectibles) c.bobT += dt;
+    for (const p of State.powerups)     p.bobT += dt;
+  },
+
+  // ---------- Player <-> entity collision pass ----------
+  handlePlayerCollisions() {
+    const p = State.player;
+    if (p.state === "dying") return;
+    const hb = Physics.playerHitbox(p);
+    const invincible = State.activePowerup && State.activePowerup.type === "invincibility";
+
+    // Collectibles
+    for (const c of State.collectibles) {
+      if (c.collected) continue;
+      const r = { x: c.x - c.w / 2, y: c.y - c.h / 2, w: c.w, h: c.h };
+      if (Physics.rectsOverlap(hb, r)) {
+        c.collected = true;
+        const value = c.type === "check" ? CONFIG.COLLECT_CHECK_VALUE : CONFIG.COLLECT_HEART_VALUE;
+        State.collectibleScore += value;
+        State.pickupPopups.push({ x: c.x, y: c.y, text: "+" + value, t: 0, life: 700 });
+        Audio.play(c.type === "check" ? "collect_check" : "collect_heart");
+      }
+    }
+    State.collectibles = State.collectibles.filter(c => !c.collected);
+
+    // Power-ups
+    for (const pu of State.powerups) {
+      if (pu.collected) continue;
+      const r = { x: pu.x - pu.w / 2, y: pu.y - pu.h / 2, w: pu.w, h: pu.h };
+      if (Physics.rectsOverlap(hb, r)) {
+        pu.collected = true;
+        const ms = pu.type === "invincibility" ? CONFIG.INVINCIBILITY_MS : CONFIG.SPEED_BOOST_MS;
+        State.activePowerup = { type: pu.type, timeLeft: ms, total: ms };
+        Audio.play("powerup");
+      }
+    }
+    State.powerups = State.powerups.filter(pu => !pu.collected);
+
+    // Enemies
+    for (const e of State.enemies) {
+      if (e.dead) continue;
+      const r = { x: e.x + 4, y: e.y + 4, w: e.w - 8, h: e.h - 8 };
+      if (!Physics.rectsOverlap(hb, r)) continue;
+
+      if (e.type === "snail") {
+        // Any contact kills snail (no bounce — emphasizes squishiness)
+        this.killEnemyWithPoints(e);
+        continue;
+      }
+
+      if (invincible) {
+        this.killEnemyWithPoints(e);
+        continue;
+      }
+
+      const stomp = Physics.isStomp(p, e);
+      if (stomp) {
+        this.killEnemyWithPoints(e);
+        p.vy = CONFIG.JUMP_VELOCITY * CONFIG.STOMP_BOUNCE_FACTOR;
+        continue;
+      }
+
+      // Non-stomp contact
+      if (e.type === "chaser") {
+        this.killPlayer();
+        return;
+      }
+      if (e.type === "pusher") {
+        // Push player in pusher's facing direction over 0.3s
+        p.pushDx = e.facing * (CONFIG.PUSHER_PUSH_TILES * CONFIG.TILE) / (CONFIG.PUSHER_PUSH_MS / 1000);
+        p.pushedMs = CONFIG.PUSHER_PUSH_MS;
+        Audio.play("push");
+      }
+    }
+  },
+};
+
+// ============================================================
+// === RENDER: BACKGROUND === (sky, sea, sun, parallax, bat, rainbow)
+// ============================================================
+// ---------- Ambient update (bats + rainbow scheduling) ----------
+const Ambient = {
+  scheduleBat() {
+    State.nextBatMs = State.time +
+      CONFIG.BAT_INTERVAL_MIN_MS +
+      Math.random() * (CONFIG.BAT_INTERVAL_MAX_MS - CONFIG.BAT_INTERVAL_MIN_MS);
+  },
+  scheduleRainbow() {
+    State.nextRainbowMs = State.time +
+      CONFIG.RAINBOW_INTERVAL_MIN_MS +
+      Math.random() * (CONFIG.RAINBOW_INTERVAL_MAX_MS - CONFIG.RAINBOW_INTERVAL_MIN_MS);
+  },
+
+  update(dt) {
+    State.time += dt * 1000;
+
+    if (State.time >= State.nextBatMs) {
+      const altitude = 30 + Math.random() * (CONFIG.LOGICAL_H * 0.45);
+      State.bats.push({
+        screenX: CONFIG.LOGICAL_W + 40,
+        baseY: altitude,
+        bobT: 0,
+        flap: 0,
+      });
+      this.scheduleBat();
+    }
+    for (const b of State.bats) {
+      b.screenX -= CONFIG.BAT_SPEED * dt;
+      b.bobT += dt;
+      b.flap += dt * 12;
+    }
+    State.bats = State.bats.filter(b => b.screenX > -60);
+
+    if (!State.rainbow && State.time >= State.nextRainbowMs) {
+      // Sea top is now at the sand top (9*TILE). Center the rainbow there so
+      // the arc (upper half) rises out of the horizon into the sky.
+      const horizonY = 9 * CONFIG.TILE;
+      State.rainbow = {
+        screenX: 120 + Math.random() * (CONFIG.LOGICAL_W - 240),
+        screenY: horizonY + 4 + Math.random() * 10,
+        radius: 220 + Math.random() * 80,
+        alpha: 0,
+        phase: "in",
+        timer: 0,
+      };
+    }
+    if (State.rainbow) {
+      State.rainbow.timer += dt * 1000;
+      const r = State.rainbow;
+      if (r.phase === "in") {
+        r.alpha = Math.min(1, r.timer / CONFIG.RAINBOW_FADE_IN_MS);
+        if (r.timer >= CONFIG.RAINBOW_FADE_IN_MS) { r.phase = "hold"; r.timer = 0; }
+      } else if (r.phase === "hold") {
+        r.alpha = 1;
+        if (r.timer >= CONFIG.RAINBOW_HOLD_MS) { r.phase = "out"; r.timer = 0; }
+      } else if (r.phase === "out") {
+        r.alpha = Math.max(0, 1 - r.timer / CONFIG.RAINBOW_FADE_OUT_MS);
+        if (r.timer >= CONFIG.RAINBOW_FADE_OUT_MS) {
+          State.rainbow = null;
+          this.scheduleRainbow();
+        }
+      }
+    }
+
+    // Update ephemerals (pickup popups, dust, ghosts)
+    for (const pu of State.pickupPopups) pu.t += dt * 1000;
+    State.pickupPopups = State.pickupPopups.filter(pu => pu.t < pu.life);
+    for (const d of State.dustPuffs) d.t += dt * 1000;
+    State.dustPuffs = State.dustPuffs.filter(d => d.t < d.life);
+    for (const g of State.ghosts) g.t += dt * 1000;
+    State.ghosts = State.ghosts.filter(g => g.t < g.life);
+  },
+};
+
+// ---------- Render: sky / sea / sun / parallax ----------
+
+function drawBackgroundSky(ctx) {
+  // Fixed sky gradient — does not scroll
+  const grad = ctx.createLinearGradient(0, 0, 0, CONFIG.LOGICAL_H);
+  grad.addColorStop(0,   CONFIG.COLORS.skyTop);
+  grad.addColorStop(0.65, CONFIG.COLORS.skyBottom);
+  grad.addColorStop(1,   CONFIG.COLORS.skyBottom);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, CONFIG.LOGICAL_W, CONFIG.LOGICAL_H);
+}
+
+function drawBackgroundSun(ctx, time) {
+  const bob = Math.sin((time / CONFIG.SUN_BOB_PERIOD_MS) * Math.PI * 2) * CONFIG.SUN_BOB_AMP;
+  const cx = CONFIG.LOGICAL_W - 150;
+  const cy = 130 + bob;
+
+  // Outer warm bloom
+  const bloom = ctx.createRadialGradient(cx, cy, 20, cx, cy, 240);
+  bloom.addColorStop(0,    "rgba(255, 220, 150, 0.55)");
+  bloom.addColorStop(0.4,  "rgba(255, 200, 130, 0.30)");
+  bloom.addColorStop(1,    "rgba(255, 200, 130, 0)");
+  ctx.fillStyle = bloom;
+  ctx.beginPath(); ctx.arc(cx, cy, 240, 0, Math.PI * 2); ctx.fill();
+
+  // Tighter inner halo
+  const halo = ctx.createRadialGradient(cx, cy, 10, cx, cy, 120);
+  halo.addColorStop(0, "rgba(255, 240, 200, 0.55)");
+  halo.addColorStop(1, "rgba(255, 240, 200, 0)");
+  ctx.fillStyle = halo;
+  ctx.beginPath(); ctx.arc(cx, cy, 120, 0, Math.PI * 2); ctx.fill();
+
+  ctx.font = "150px sans-serif";
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText("🌞", cx, cy);
+}
+
+function drawBackgroundFarLayer(ctx, cameraX) {
+  // Distant horizon silhouettes — slow scroll
+  const offset = cameraX * CONFIG.PARALLAX_FAR;
+  const horizonY = CONFIG.LOGICAL_H * 0.62;
+
+  ctx.fillStyle = "rgba(139, 111, 71, 0.32)";
+  // Procedural rolling hills based on x position
+  const step = 80;
+  const x0 = Math.floor((offset - 80) / step) * step;
+  ctx.beginPath();
+  ctx.moveTo(-50, horizonY + 40);
+  for (let x = x0 - 80; x < x0 + CONFIG.LOGICAL_W + 80; x += step) {
+    const sx = x - offset;
+    const peak = horizonY - 18 - 14 * Math.sin(x * 0.011) - 10 * Math.cos(x * 0.027);
+    ctx.lineTo(sx, peak);
+  }
+  ctx.lineTo(CONFIG.LOGICAL_W + 50, horizonY + 40);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawBackgroundSea(ctx, cameraX) {
+  // Sea horizon now sits at the sand top so there's no blue band between
+  // sky and beach. Sea is visible only in pit columns (and below tiles).
+  const seaTop = 9 * CONFIG.TILE; // = 432
+  ctx.fillStyle = CONFIG.COLORS.sea;
+  ctx.fillRect(0, seaTop, CONFIG.LOGICAL_W, CONFIG.LOGICAL_H - seaTop);
+
+  // Animated lo-fi waves: a handful of sinusoidal lines drifting horizontally
+  // and undulating in place. They render in the sea region and get covered by
+  // sand tiles, so they're visible exactly where pits expose the water.
+  const t = State.time / 1000;
+  ctx.strokeStyle = CONFIG.COLORS.seaHi;
+  ctx.lineWidth = 2;
+  ctx.lineCap = "round";
+
+  const lines = 5;
+  for (let i = 0; i < lines; i++) {
+    const baseY = seaTop + 14 + i * 16;
+    const amp = 2.5 + i * 0.6;
+    const wavelength = 70 + i * 24;
+    const phase = t * (0.45 + i * 0.08) + i * 0.9;
+    const drift = (t * (14 + i * 4) + cameraX * 0.04) % wavelength;
+
+    ctx.globalAlpha = 0.34 - i * 0.05;
+    ctx.beginPath();
+    for (let x = -wavelength; x <= CONFIG.LOGICAL_W + wavelength; x += 6) {
+      const k = (x - drift) * (Math.PI * 2 / wavelength) + phase;
+      const y = baseY + Math.sin(k) * amp;
+      if (x === -wavelength) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawBackgroundNearLayer(ctx, cameraX) {
+  // Mid-distance palms + rocks at 0.5× scroll, planted at sand top
+  const offset = cameraX * CONFIG.PARALLAX_NEAR;
+  const baseY = 9 * CONFIG.TILE; // sand top
+  const step = 220;
+  const x0 = Math.floor((offset - step) / step) * step;
+  for (let x = x0 - step; x < x0 + CONFIG.LOGICAL_W + step; x += step) {
+    const sx = x - offset;
+    // pseudo-random variant from x
+    const seed = Math.abs(Math.sin(x * 0.7) * 1000) % 1;
+    if (seed < 0.5) {
+      // palm tree silhouette
+      drawPalmSilhouette(ctx, sx + (seed * 80), baseY, 1 + seed * 0.4);
+    } else {
+      // rock
+      drawRockSilhouette(ctx, sx + (seed * 100), baseY + 10, 1 + seed * 0.3);
+    }
+  }
+}
+
+function drawPalmSilhouette(ctx, x, baseY, scale) {
+  ctx.fillStyle = "rgba(61, 40, 23, 0.45)";
+  // trunk
+  ctx.beginPath();
+  ctx.moveTo(x - 3 * scale, baseY);
+  ctx.quadraticCurveTo(x + 4 * scale, baseY - 32 * scale, x - 2 * scale, baseY - 64 * scale);
+  ctx.lineTo(x + 3 * scale, baseY - 64 * scale);
+  ctx.quadraticCurveTo(x + 9 * scale, baseY - 32 * scale, x + 3 * scale, baseY);
+  ctx.closePath();
+  ctx.fill();
+  // fronds
+  const cx = x + 1 * scale, cy = baseY - 64 * scale;
+  for (let i = 0; i < 6; i++) {
+    const ang = (i / 6) * Math.PI * 2 + Math.PI;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.quadraticCurveTo(
+      cx + Math.cos(ang) * 16 * scale,
+      cy + Math.sin(ang) * 16 * scale - 6,
+      cx + Math.cos(ang) * 28 * scale,
+      cy + Math.sin(ang) * 14 * scale - 4
+    );
+    ctx.lineWidth = 4 * scale;
+    ctx.strokeStyle = "rgba(61, 40, 23, 0.45)";
+    ctx.stroke();
+  }
+}
+
+function drawRockSilhouette(ctx, x, baseY, scale) {
+  ctx.fillStyle = "rgba(61, 40, 23, 0.35)";
+  ctx.beginPath();
+  ctx.ellipse(x, baseY, 24 * scale, 11 * scale, 0, Math.PI, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawBat(ctx, x, y, frame) {
+  ctx.save();
+  ctx.font = "28px sans-serif";
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  // tiny vertical squash on flap to suggest wing motion
+  const squash = 1 + Math.sin(frame) * 0.08;
+  ctx.translate(x, y);
+  ctx.scale(1, squash);
+  ctx.fillText("🦇", 0, 0);
+  ctx.restore();
+}
+
+function drawRainbow(ctx, x, y, radius, alpha) {
+  ctx.save();
+  ctx.globalAlpha = alpha * 0.55;
+  ctx.lineWidth = 9;
+  const stripes = CONFIG.COLORS.rainbowStripes;
+  for (let i = 0; i < stripes.length; i++) {
+    ctx.strokeStyle = stripes[i];
+    ctx.beginPath();
+    ctx.arc(x, y, radius - i * 10, Math.PI, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// Composite background draw call
+function drawAllBackground(ctx, cameraX, time) {
+  drawBackgroundSky(ctx);
+  drawBackgroundSun(ctx, time);
+  drawBackgroundFarLayer(ctx, cameraX);
+  if (State.rainbow) {
+    drawRainbow(ctx, State.rainbow.screenX, State.rainbow.screenY, State.rainbow.radius, State.rainbow.alpha);
+  }
+  drawBackgroundSea(ctx, cameraX);
+  drawBackgroundNearLayer(ctx, cameraX);
+  for (const b of State.bats) {
+    const y = b.baseY + Math.sin(b.bobT * (Math.PI * 2) / (CONFIG.BAT_BOB_PERIOD_MS / 1000)) * CONFIG.BAT_BOB_AMP;
+    drawBat(ctx, b.screenX, y, b.flap);
+  }
+}
+
+// ============================================================
+// === RENDER: TILES + ENTITIES === (drawX functions per §4.10)
+// ============================================================
+// All entity/tile draw functions take screen coords (x, y) at the top-left of a 48x48 logical box.
+
+function drawTileGround(ctx, x, y, variant) {
+  const C = CONFIG.COLORS;
+  // If this is the bottom-most ground row, extend the fill to the canvas
+  // bottom so the 12px gap below the 11-row chunk doesn't show sea.
+  const tileBottom = y + CONFIG.TILE;
+  const effectiveBottom = (tileBottom >= CONFIG.LOGICAL_H - 16) ? CONFIG.LOGICAL_H : tileBottom;
+  const drawH = effectiveBottom - y;
+  // Body
+  ctx.fillStyle = C.sandTop;
+  ctx.fillRect(x, y, CONFIG.TILE, drawH);
+  // Bottom shadow band
+  ctx.fillStyle = C.sandSide;
+  ctx.fillRect(x, effectiveBottom - 6, CONFIG.TILE, 6);
+  // Top highlight
+  ctx.fillStyle = "rgba(255,255,255,0.18)";
+  ctx.fillRect(x, y, CONFIG.TILE, 3);
+  // Speckles for texture (deterministic based on tile position)
+  ctx.fillStyle = C.sandShadow;
+  const seed = (variant * 7919) | 0;
+  for (let i = 0; i < 4; i++) {
+    const sx = ((seed * (i + 1) * 131) >>> 0) % CONFIG.TILE;
+    const sy = 8 + (((seed * (i + 3) * 547) >>> 0) % (CONFIG.TILE - 16));
+    ctx.fillRect(x + sx, y + sy, 2, 1);
+  }
+}
+
+function drawTilePlatform(ctx, x, y, variant) {
+  const C = CONFIG.COLORS;
+  ctx.save();
+  // Rounded rect (slightly inset)
+  const r = 6;
+  const px = x + 2, py = y + 4, pw = CONFIG.TILE - 4, ph = CONFIG.TILE - 12;
+  ctx.fillStyle = C.platform;
+  ctx.beginPath();
+  ctx.moveTo(px + r, py);
+  ctx.lineTo(px + pw - r, py);
+  ctx.quadraticCurveTo(px + pw, py, px + pw, py + r);
+  ctx.lineTo(px + pw, py + ph - r);
+  ctx.quadraticCurveTo(px + pw, py + ph, px + pw - r, py + ph);
+  ctx.lineTo(px + r, py + ph);
+  ctx.quadraticCurveTo(px, py + ph, px, py + ph - r);
+  ctx.lineTo(px, py + r);
+  ctx.quadraticCurveTo(px, py, px + r, py);
+  ctx.closePath();
+  ctx.fill();
+  // Top highlight band
+  ctx.fillStyle = C.platformHi;
+  ctx.fillRect(px + 6, py + 3, pw - 12, 3);
+  ctx.restore();
+}
+
+// ---------- Enemies ----------
+
+function drawEmojiCentered(ctx, emoji, x, y, sizePx) {
+  ctx.font = sizePx + "px sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  // Center the visible glyph near the bottom of the tile so emojis don't float
+  ctx.fillText(emoji, x + CONFIG.TILE / 2, y + 30);
+}
+
+function drawEnemyChaser(ctx, x, y, frame) {
+  drawEmojiCentered(ctx, "👾", x, y, 40);
+}
+function drawEnemyPusher(ctx, x, y, frame) {
+  drawEmojiCentered(ctx, "🥸", x, y, 40);
+}
+function drawEnemySnail(ctx, x, y, frame) {
+  drawEmojiCentered(ctx, "🐌", x, y, 40);
+}
+
+function drawEnemySquished(ctx, e, screenX, screenY) {
+  // Quick squish: scale Y → 0.3 over 200ms
+  const t = Math.min(1, e.squishT / 200);
+  const sy = 1 - 0.7 * t;
+  const alpha = 1 - t * 0.6;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.translate(screenX + CONFIG.TILE / 2, screenY + 46);
+  ctx.scale(1, sy);
+  ctx.translate(-(screenX + CONFIG.TILE / 2), -(screenY + 46));
+  const emoji = e.type === "chaser" ? "👾" : (e.type === "pusher" ? "🥸" : "🐌");
+  drawEmojiCentered(ctx, emoji, screenX, screenY, 40);
+  ctx.restore();
+}
+
+// ---------- Collectibles ----------
+
+function drawCollectibleCheck(ctx, x, y, frame) {
+  ctx.font = "32px sans-serif";
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText("✅", x, y);
+}
+function drawCollectibleHeart(ctx, x, y, frame) {
+  ctx.font = "32px sans-serif";
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  // subtle glow behind
+  const glow = ctx.createRadialGradient(x, y, 4, x, y, 28);
+  glow.addColorStop(0, "rgba(232, 155, 160, 0.6)");
+  glow.addColorStop(1, "rgba(232, 155, 160, 0)");
+  ctx.fillStyle = glow;
+  ctx.beginPath(); ctx.arc(x, y, 28, 0, Math.PI * 2); ctx.fill();
+  ctx.fillText("💖", x, y);
+}
+
+// ---------- Power-ups ----------
+
+function drawPowerupInvincibility(ctx, x, y, frame) {
+  const glow = ctx.createRadialGradient(x, y, 6, x, y, 36);
+  glow.addColorStop(0, "rgba(255, 215, 120, 0.7)");
+  glow.addColorStop(1, "rgba(255, 215, 120, 0)");
+  ctx.fillStyle = glow;
+  ctx.beginPath(); ctx.arc(x, y, 36, 0, Math.PI * 2); ctx.fill();
+  ctx.font = "40px sans-serif";
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText("🐎", x, y);
+}
+function drawPowerupSpeed(ctx, x, y, frame) {
+  const glow = ctx.createRadialGradient(x, y, 6, x, y, 36);
+  glow.addColorStop(0, "rgba(180, 230, 255, 0.7)");
+  glow.addColorStop(1, "rgba(180, 230, 255, 0)");
+  ctx.fillStyle = glow;
+  ctx.beginPath(); ctx.arc(x, y, 36, 0, Math.PI * 2); ctx.fill();
+  ctx.font = "40px sans-serif";
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText("✨", x, y);
+}
+
+// ---------- Ephemera ----------
+
+function drawPickupPopup(ctx, p, cameraX) {
+  const t = p.t / p.life;
+  const sx = p.x - cameraX;
+  const sy = p.y - 18 - t * 30;
+  ctx.save();
+  ctx.globalAlpha = 1 - t;
+  ctx.font = "bold 18px 'Nunito', system-ui, sans-serif";
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillStyle = CONFIG.COLORS.textAccent;
+  ctx.strokeStyle = "rgba(255,255,255,0.5)";
+  ctx.lineWidth = 3;
+  ctx.strokeText(p.text, sx, sy);
+  ctx.fillText(p.text, sx, sy);
+  ctx.restore();
+}
+
+function drawDustPuff(ctx, d, cameraX) {
+  const t = d.t / d.life;
+  const sx = d.x - cameraX;
+  const sy = d.y - t * 6;
+  ctx.save();
+  ctx.globalAlpha = (1 - t) * 0.6;
+  ctx.font = "20px sans-serif";
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText("💨", sx, sy);
+  ctx.restore();
+}
+
+// ---------- Composite: render tiles + entities ----------
+
+function renderWorld(ctx, cameraX) {
+  const screenLeftTile = Math.floor(cameraX / CONFIG.TILE) - 1;
+  const screenRightTile = Math.ceil((cameraX + CONFIG.LOGICAL_W) / CONFIG.TILE) + 1;
+
+  // Tiles
+  for (const chunk of State.chunks) {
+    if (chunk.right < screenLeftTile || chunk.left > screenRightTile) continue;
+    for (let row = 0; row < CONFIG.CHUNK_H; row++) {
+      for (let col = 0; col < CONFIG.CHUNK_W; col++) {
+        const t = chunk.tiles[row][col];
+        if (!t) continue;
+        const tx = chunk.left + col;
+        const sx = tx * CONFIG.TILE - cameraX;
+        const sy = row * CONFIG.TILE;
+        const variant = (tx * 13 + row * 7) | 0;
+        if (t === "ground")        drawTileGround(ctx, sx, sy, variant);
+        else if (t === "platform") drawTilePlatform(ctx, sx, sy, variant);
+      }
+    }
+  }
+
+  // Collectibles
+  for (const c of State.collectibles) {
+    const bob = Math.sin(c.bobT * (Math.PI * 2) / (CONFIG.COLLECT_BOB_PERIOD_MS / 1000)) * CONFIG.COLLECT_BOB_AMP;
+    const sx = c.x - cameraX;
+    const sy = c.y + bob;
+    if (sx < -40 || sx > CONFIG.LOGICAL_W + 40) continue;
+    if (c.type === "check") drawCollectibleCheck(ctx, sx, sy, 0);
+    else                    drawCollectibleHeart(ctx, sx, sy, 0);
+  }
+
+  // Power-ups
+  for (const pu of State.powerups) {
+    const bob = Math.sin(pu.bobT * (Math.PI * 2) / (CONFIG.POWERUP_BOB_PERIOD_MS / 1000)) * CONFIG.POWERUP_BOB_AMP;
+    const sx = pu.x - cameraX;
+    const sy = pu.y + bob;
+    if (sx < -50 || sx > CONFIG.LOGICAL_W + 50) continue;
+    if (pu.type === "invincibility") drawPowerupInvincibility(ctx, sx, sy, 0);
+    else                             drawPowerupSpeed(ctx, sx, sy, 0);
+  }
+
+  // Enemies
+  for (const e of State.enemies) {
+    const sx = e.x - cameraX;
+    if (sx < -60 || sx > CONFIG.LOGICAL_W + 60) continue;
+    const bob = (e.type === "chaser" && !e.chasing)
+      ? Math.sin(e.bobT * 3) * CONFIG.CHASER_IDLE_BOB_AMP
+      : 0;
+    const sy = e.y + bob;
+    if (e.dead) {
+      drawEnemySquished(ctx, e, sx, sy);
+      continue;
+    }
+    if      (e.type === "chaser") drawEnemyChaser(ctx, sx, sy, 0);
+    else if (e.type === "pusher") drawEnemyPusher(ctx, sx, sy, 0);
+    else if (e.type === "snail")  drawEnemySnail(ctx, sx, sy, 0);
+  }
+
+  // Speed-boost trail ghosts (drawn before wolf so they appear behind)
+  for (const g of State.ghosts) {
+    const t = g.t / g.life;
+    ctx.save();
+    ctx.globalAlpha = (1 - t) * 0.35;
+    drawWolf(ctx, g.x - cameraX, g.y, g.state, g.frame, g.facing, 0);
+    ctx.restore();
+  }
+
+  // Wolf
+  const p = State.player;
+  drawWolf(
+    ctx,
+    p.x - cameraX,
+    p.y,
+    p.state,
+    p.runFrame,
+    p.facing,
+    State.time
+  );
+
+  // Dust puffs (over wolf? behind wolf is fine; draw after wolf for visibility)
+  for (const d of State.dustPuffs) drawDustPuff(ctx, d, cameraX);
+  // Pickup popups (on top of everything in world)
+  for (const pu of State.pickupPopups) drawPickupPopup(ctx, pu, cameraX);
+}
+
+// ============================================================
+// === RENDER: WOLF === (isolated drawWolf with 3-frame run)
+// ============================================================
+// Single isolated wolf renderer. See §4.10 — sprite swap replaces internals only.
+// (x, y) is the top-left of the 48x48 logical bounding box.
+function drawWolf(ctx, x, y, state, frame, facing, timeMs) {
+  const C = CONFIG.COLORS;
+  const invincible = State.activePowerup && State.activePowerup.type === "invincibility";
+  const scale = invincible ? 1.1 : 1.0;
+
+  ctx.save();
+
+  // Idle bob (visual only)
+  let visY = y;
+  if (state === "idle") {
+    const t = (timeMs || 0) / CONFIG.WOLF_IDLE_BOB_PERIOD_MS;
+    visY += Math.sin(t * Math.PI * 2) * CONFIG.WOLF_IDLE_BOB_AMP;
+  }
+
+  // Pivot around wolf center (cy shifted so legs end exactly at the hitbox bottom)
+  const cx = x + 24, cy = visY + 21;
+  ctx.translate(cx, cy);
+  ctx.scale(facing < 0 ? -scale : scale, scale);
+
+  // Tilt + dying spin
+  let rot = 0;
+  if (state === "jumpRise")      rot = -5 * Math.PI / 180;
+  else if (state === "jumpFall") rot =  5 * Math.PI / 180;
+  else if (state === "run") {
+    if (frame === 1)      rot =  3 * Math.PI / 180;
+    else if (frame === 2) rot =  1 * Math.PI / 180;
+  } else if (state === "dying") {
+    rot = State.player.dyingSpin || 0;
+  }
+  ctx.rotate(rot);
+
+  // ---- Invincibility rainbow outline (drawn under the wolf) ----
+  if (invincible) {
+    const stripes = CONFIG.COLORS.rainbowStripes;
+    const idx = Math.floor(((timeMs || 0) / 125) % stripes.length);
+    ctx.save();
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = stripes[idx];
+    ctx.beginPath();
+    ctx.ellipse(0, 6, 22, 16, 0, 0, Math.PI * 2);     // body silhouette
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(10, -6, 16, 13, 0, 0, Math.PI * 2);   // head silhouette
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // ---- Legs (drawn first so they're behind body) ----
+  let legXOffsets = [0, 0, 0, 0]; // back-pair (2), front-pair (2)
+  let legSplay = 0;
+  if (state === "run") {
+    if (frame === 0)      { legXOffsets = [0,  0,  0, 0]; }
+    else if (frame === 1) { legXOffsets = [-3, -3, 3, 3]; }
+    else                  { legXOffsets = [2,  2, -2, -2]; }
+  } else if (state === "jumpRise" || state === "jumpFall") {
+    legSplay = state === "jumpRise" ? 3 : -1;
+  }
+
+  const legW = 5, legH = 9;
+  const legBaseY = 14;
+  const legXs = [-12, -6, 7, 13]; // back-back, back-front, front-back, front-front
+  ctx.fillStyle = C.wolfShadow;
+  for (let i = 0; i < 4; i++) {
+    const lx = legXs[i] + legXOffsets[i] + (i < 2 ? -legSplay : legSplay);
+    ctx.fillRect(lx - legW / 2, legBaseY, legW, legH);
+  }
+
+  // ---- Body (pear-shape: bigger lower ellipse + smaller upper) ----
+  ctx.fillStyle = C.wolfBody;
+  ctx.beginPath();
+  ctx.ellipse(0, 6, 18, 12, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(-2, -2, 13, 9, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Blotchy off-white patches
+  ctx.fillStyle = C.wolfBlotch;
+  ctx.beginPath(); ctx.ellipse(-6, 8, 5, 3, 0.3, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(5,  10, 4, 2.5, -0.2, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(-4, -1, 3, 2, 0.1, 0, Math.PI * 2); ctx.fill();
+
+  // ---- Head (too-large, leaned forward = +X) ----
+  ctx.fillStyle = C.wolfBody;
+  ctx.beginPath();
+  ctx.ellipse(10, -6, 16, 13, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Head blotch
+  ctx.fillStyle = C.wolfBlotch;
+  ctx.beginPath(); ctx.ellipse(8, -2, 4, 2, 0.4, 0, Math.PI * 2); ctx.fill();
+
+  // ---- Ears (one drooped) ----
+  ctx.fillStyle = C.wolfShadow;
+  // Left ear (back) — upright triangle
+  ctx.beginPath();
+  ctx.moveTo(2, -17);
+  ctx.lineTo(7, -12);
+  ctx.lineTo(0, -10);
+  ctx.closePath(); ctx.fill();
+  // Right ear (front) — drooped
+  ctx.beginPath();
+  ctx.moveTo(15, -16);
+  ctx.lineTo(22, -10);
+  ctx.lineTo(17, -7);
+  ctx.closePath(); ctx.fill();
+
+  // ---- Snout (off-center wedge) ----
+  ctx.fillStyle = C.wolfSnout;
+  ctx.beginPath();
+  ctx.moveTo(20, -5);
+  ctx.lineTo(28, -3);
+  ctx.lineTo(20, 1);
+  ctx.closePath();
+  ctx.fill();
+
+  // ---- Eyes (googly, asymmetric) ----
+  // Eye whites
+  ctx.fillStyle = "#FFFFFF";
+  ctx.beginPath(); ctx.arc(6, -8, 5, 0, Math.PI * 2); ctx.fill();   // back eye
+  ctx.beginPath(); ctx.arc(15, -7, 4.5, 0, Math.PI * 2); ctx.fill(); // front eye
+
+  // Pupils (asymmetric placement — the defining joke)
+  if (state === "dying") {
+    // X_X eyes
+    ctx.strokeStyle = C.textDark;
+    ctx.lineWidth = 1.6;
+    const drawX = (cx, cy, s) => {
+      ctx.beginPath();
+      ctx.moveTo(cx - s, cy - s); ctx.lineTo(cx + s, cy + s);
+      ctx.moveTo(cx + s, cy - s); ctx.lineTo(cx - s, cy + s);
+      ctx.stroke();
+    };
+    drawX(6, -8, 3);
+    drawX(15, -7, 2.8);
+  } else {
+    ctx.fillStyle = C.textDark;
+    // Back eye pupil — looking up-left, larger
+    ctx.beginPath(); ctx.arc(4.4, -9.5, 2.2, 0, Math.PI * 2); ctx.fill();
+    // Front eye pupil — looking forward, smaller, slightly down
+    ctx.beginPath(); ctx.arc(16, -6, 1.6, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // ---- Mouth (tiny dumb open) ----
+  ctx.fillStyle = C.textDark;
+  ctx.beginPath();
+  ctx.ellipse(22, 2, 2.2, 1.6, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // Tongue dot
+  ctx.fillStyle = C.wolfPink;
+  ctx.beginPath();
+  ctx.arc(22.4, 2.6, 0.9, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+// ============================================================
+// === UI === (HUD updates, milestone messages, screen switching)
+// ============================================================
+const UI = {
+  el: {},
+  milestoneTimer: null,
+
+  cache() {
+    this.el.score        = document.getElementById("hud-score");
+    this.el.best         = document.getElementById("hud-best");
+    this.el.dist         = document.getElementById("hud-dist");
+    this.el.startScreen  = document.getElementById("start-screen");
+    this.el.deathScreen  = document.getElementById("death-screen");
+    this.el.pauseScreen  = document.getElementById("pause-screen");
+    this.el.startBtn     = document.getElementById("start-btn");
+    this.el.restartBtn   = document.getElementById("restart-btn");
+    this.el.resumeBtn    = document.getElementById("resume-btn");
+    this.el.muteBtn      = document.getElementById("mute-btn");
+    this.el.startTagline = document.getElementById("start-tagline");
+    this.el.deathSub     = document.getElementById("death-sub");
+    this.el.deathScore   = document.getElementById("death-score");
+    this.el.deathBest    = document.getElementById("death-best");
+    this.el.deathDist    = document.getElementById("death-dist");
+    this.el.milestone    = document.getElementById("milestone");
+    this.el.powerupInd   = document.getElementById("powerup-indicator");
+    this.el.powerupIcon  = document.getElementById("powerup-icon");
+    this.el.powerupBar   = document.getElementById("powerup-bar-fill");
+    this.el.startHint    = document.getElementById("start-hint");
+  },
+
+  bindButtons() {
+    this.el.startBtn.addEventListener("click", () => this.start());
+    this.el.restartBtn.addEventListener("click", () => this.restart());
+    this.el.resumeBtn.addEventListener("click", () => this.resume());
+    this.el.muteBtn.addEventListener("click", () => this.toggleMute());
+    // Tapping pause overlay anywhere resumes
+    this.el.pauseScreen.addEventListener("click", (e) => {
+      if (e.target === this.el.pauseScreen) this.resume();
+    });
+  },
+
+  showOverlay(id) {
+    ["start-screen", "death-screen", "pause-screen"].forEach(o => {
+      document.getElementById(o).classList.toggle("show", o === id);
+    });
+  },
+  hideOverlays() {
+    ["start-screen", "death-screen", "pause-screen"].forEach(o =>
+      document.getElementById(o).classList.remove("show"));
+  },
+
+  pickFrom(arr) { return arr[Math.floor(Math.random() * arr.length)]; },
+
+  refreshStartScreen() {
+    this.el.startTagline.textContent = this.pickFrom(CONFIG.TAGLINES);
+    const isTouch = document.body.classList.contains("touch");
+    this.el.startHint.textContent = isTouch
+      ? "tap ◀ ▶ to move · tap ⤴ to jump"
+      : "arrows / WASD to move · space to jump · P to pause";
+  },
+
+  start() {
+    Audio.ensure();
+    if (Audio.ctx && Audio.ctx.state === "suspended") Audio.ctx.resume();
+    State.mode = "playing";
+    this.hideOverlays();
+    resetGame();
+    Audio.startMusic();
+  },
+
+  pause() {
+    if (State.mode !== "playing") return;
+    State.mode = "paused";
+    this.showOverlay("pause-screen");
+    Audio.pauseMusic();
+  },
+
+  resume() {
+    if (State.mode !== "paused") return;
+    State.mode = "playing";
+    this.hideOverlays();
+    Input.reset();
+    Audio.resumeMusic();
+  },
+
+  gameOver() {
+    if (State.mode === "dead") return;
+    State.mode = "dead";
+    Audio.stopMusic();
+    // Persist best
+    const total = State.distance + State.collectibleScore;
+    if (total > State.bestScore) {
+      State.bestScore = total;
+      try { localStorage.setItem(CONFIG.STORAGE.bestScore, String(total)); } catch(e){}
+    }
+    if (State.distance > State.bestDistance) {
+      State.bestDistance = State.distance;
+      try { localStorage.setItem(CONFIG.STORAGE.bestDistance, String(State.distance)); } catch(e){}
+    }
+    State.runs++;
+    try { localStorage.setItem(CONFIG.STORAGE.runs, String(State.runs)); } catch(e){}
+
+    // Populate death screen
+    this.el.deathScore.textContent = total;
+    this.el.deathBest.textContent  = State.bestScore;
+    this.el.deathDist.textContent  = State.distance;
+    this.el.deathSub.textContent   = this.pickFrom(CONFIG.DEATH_SUBS);
+    this.showOverlay("death-screen");
+  },
+
+  restart() {
+    State.mode = "playing";
+    this.hideOverlays();
+    resetGame();
+    Audio.startMusic();
+  },
+
+  toggleMute() {
+    State.muted = !State.muted;
+    try { localStorage.setItem(CONFIG.STORAGE.muted, State.muted ? "1" : "0"); } catch(e){}
+    this.el.muteBtn.textContent = State.muted ? "🔇" : "🔊";
+    Audio.applyMute();
+  },
+
+  loadMute() {
+    try {
+      State.muted = localStorage.getItem(CONFIG.STORAGE.muted) === "1";
+    } catch(e) { State.muted = false; }
+    this.el.muteBtn.textContent = State.muted ? "🔇" : "🔊";
+  },
+
+  loadBest() {
+    try {
+      State.bestScore    = parseInt(localStorage.getItem(CONFIG.STORAGE.bestScore)    || "0", 10) || 0;
+      State.bestDistance = parseInt(localStorage.getItem(CONFIG.STORAGE.bestDistance) || "0", 10) || 0;
+      State.runs         = parseInt(localStorage.getItem(CONFIG.STORAGE.runs)         || "0", 10) || 0;
+    } catch(e) {}
+  },
+
+  updateHUD() {
+    const total = State.distance + State.collectibleScore;
+    State.score = total;
+    this.el.score.textContent = total;
+    this.el.best.textContent  = Math.max(State.bestScore, total);
+    this.el.dist.textContent  = State.distance;
+
+    if (State.activePowerup) {
+      this.el.powerupInd.classList.add("active");
+      this.el.powerupIcon.textContent = State.activePowerup.type === "invincibility" ? "🐎" : "✨";
+      const pct = Math.max(0, State.activePowerup.timeLeft / State.activePowerup.total);
+      this.el.powerupBar.style.width = (pct * 100) + "%";
+    } else {
+      this.el.powerupInd.classList.remove("active");
+    }
+  },
+
+  showMilestone(text) {
+    const m = this.el.milestone;
+    m.textContent = text;
+    m.classList.add("show");
+    if (this.milestoneTimer) clearTimeout(this.milestoneTimer);
+    this.milestoneTimer = setTimeout(() => {
+      m.classList.remove("show");
+    }, 1500);
+  },
+};
+
+// ============================================================
+// === MAIN LOOP + INIT ===
+// ============================================================
+function resetGame() {
+  // Wipe transient collections
+  State.chunks = [];
+  State.enemies = [];
+  State.collectibles = [];
+  State.powerups = [];
+  State.pickupPopups = [];
+  State.dustPuffs = [];
+  State.ghosts = [];
+  State.bats = [];
+  State.rainbow = null;
+  State.milestonesHit = new Set();
+
+  // Reset scalars
+  State.cameraX = 0;
+  State.maxCameraX = 0;
+  State.nextChunkLeft = 0;
+  State.lastHardWasIndex = -2;
+  State.lastPowerupChunkIdx = -CONFIG.POWERUP_MIN_CHUNKS_BETWEEN;
+  State.chunkCount = 0;
+  State.distance = 0;
+  State.collectibleScore = 0;
+  State.score = 0;
+  State.activePowerup = null;
+
+  // Spawn player at chunk 0, tile 2 (ground is at rows 9-10 → player sits atop row 9)
+  State.player = makePlayer(2, 8);
+
+  // Generate initial chunks
+  World.ensureAhead();
+
+  // Schedule ambient events
+  Ambient.scheduleBat();
+  Ambient.scheduleRainbow();
+
+  // Reset input edge state
+  Input.reset();
+
+  // Clear HUD power-up indicator immediately
+  UI.updateHUD();
+}
+
+// ---------- Canvas setup ----------
+let canvas, ctx, dpr = 1;
+
+function setupCanvas() {
+  canvas = document.getElementById("game");
+  dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+  canvas.width  = CONFIG.LOGICAL_W * dpr;
+  canvas.height = CONFIG.LOGICAL_H * dpr;
+  ctx = canvas.getContext("2d");
+  ctx.scale(dpr, dpr);
+  ctx.imageSmoothingEnabled = true;
+}
+
+// ---------- Main loop ----------
+function frame(nowMs) {
+  if (!State.lastFrameMs) State.lastFrameMs = nowMs;
+  let dt = (nowMs - State.lastFrameMs) / 1000;
+  State.lastFrameMs = nowMs;
+  // Clamp dt to avoid huge jumps after tab-switch / pause
+  if (dt > 1 / 30) dt = 1 / 30;
+  if (dt < 0) dt = 0;
+
+  if (State.mode === "playing") {
+    Entities.updatePlayer(dt);
+    Entities.updateEnemies(dt);
+    Entities.updateCollectiblesAndPowerups(dt);
+    Entities.handlePlayerCollisions();
+    Ambient.update(dt);
+    World.ensureAhead();
+    World.cullBehind();
+
+    // Camera: lock player at 35% from left, forward-only scroll
+    const targetCam = State.player.x - CONFIG.LOGICAL_W * CONFIG.CAMERA_FOLLOW_RATIO;
+    if (targetCam > State.maxCameraX) {
+      State.maxCameraX = targetCam;
+    }
+    State.cameraX = Math.max(0, State.maxCameraX);
+
+    UI.updateHUD();
+  } else if (State.mode === "dead" || State.mode === "paused") {
+    // No world update; just keep rendering last frame
+  } else if (State.mode === "start") {
+    // Idle background animation only
+    Ambient.update(dt);
+  }
+
+  // ---- Render ----
+  ctx.clearRect(0, 0, CONFIG.LOGICAL_W, CONFIG.LOGICAL_H);
+  drawAllBackground(ctx, State.cameraX, State.time);
+  if (State.player) renderWorld(ctx, State.cameraX);
+
+  requestAnimationFrame(frame);
+}
+
+// ---------- Init ----------
+function init() {
+  setupCanvas();
+  UI.cache();
+  UI.bindButtons();
+  UI.loadBest();
+  UI.loadMute();
+  UI.refreshStartScreen();
+  Input.init();
+  // Pre-build the world so the start screen has something behind it
+  resetGame();
+  // Ambient schedules already set; start the loop
+  requestAnimationFrame(frame);
+}
+
+// Bootstrap
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", init);
+} else {
+  init();
+}
+</script>
+</body>
+</html>
