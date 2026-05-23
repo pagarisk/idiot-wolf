@@ -1286,6 +1286,32 @@ const Physics = {
     }
 
     // ---- Y axis ----
+    // Ground probe: if there's a solid tile directly under the hitbox and the
+    // player isn't moving upward, pin them. Without this, gravity is applied
+    // every frame and the player oscillates between the snapped y and a sub-
+    // pixel-lower y, producing visible jitter when standing still.
+    if (p.vy >= 0) {
+      const hbProbe = this.playerHitbox(p);
+      const probeBottom = hbProbe.y + hbProbe.h;
+      const probeRow = Math.floor((probeBottom + 1) / CONFIG.TILE);
+      const minTX = Math.floor(hbProbe.x / CONFIG.TILE);
+      const maxTX = Math.floor((hbProbe.x + hbProbe.w - 1) / CONFIG.TILE);
+      // Only consider it "standing" if the player is already at or just barely
+      // above the tile boundary (within 2px). Prevents teleport-to-ground when
+      // mid-jump-arc.
+      const distToTile = probeRow * CONFIG.TILE - probeBottom;
+      if (distToTile >= 0 && distToTile <= 2) {
+        for (let tx = minTX; tx <= maxTX; tx++) {
+          if (World.isSolid(tx, probeRow)) {
+            p.y = probeRow * CONFIG.TILE - CONFIG.WOLF_HITBOX.offsetY - CONFIG.WOLF_HITBOX.h;
+            p.vy = 0;
+            p.onGround = true;
+            return false; // no land event; player was already on ground
+          }
+        }
+      }
+    }
+
     p.vy += CONFIG.GRAVITY * dt;
     if (p.vy > CONFIG.MAX_FALL_SPEED) p.vy = CONFIG.MAX_FALL_SPEED;
     p.y += p.vy * dt;
@@ -2227,28 +2253,18 @@ function drawWolf(ctx, x, y, state, frame, facing, timeMs) {
 
   ctx.save();
 
-  // Idle bob (visual only)
-  let visY = y;
-  if (state === "idle") {
-    const t = (timeMs || 0) / CONFIG.WOLF_IDLE_BOB_PERIOD_MS;
-    visY += Math.sin(t * Math.PI * 2) * CONFIG.WOLF_IDLE_BOB_AMP;
-  }
-
-  // Pivot around wolf center (cy shifted so legs end exactly at hitbox bottom)
-  const cx = x + 24, cy = visY + 21;
+  // Pivot around wolf center (cy shifted so legs end exactly at hitbox bottom).
+  // Floored to integer pixels so any sub-pixel physics drift can't manifest
+  // as visible jitter on antialiased edges.
+  const cx = Math.round(x + 24), cy = Math.round(y + 21);
   ctx.translate(cx, cy);
   ctx.scale(facing < 0 ? -scale : scale, scale);
 
-  // Body tilt + dying spin
+  // Pose tilts (intentional poses, not idle/run wobble)
   let rot = 0;
   if (state === "jumpRise")      rot = -5 * Math.PI / 180;
   else if (state === "jumpFall") rot =  5 * Math.PI / 180;
-  else if (state === "run") {
-    if (frame === 1)      rot =  3 * Math.PI / 180;
-    else if (frame === 2) rot =  1 * Math.PI / 180;
-  } else if (state === "dying") {
-    rot = State.player.dyingSpin || 0;
-  }
+  else if (state === "dying")    rot = State.player.dyingSpin || 0;
   ctx.rotate(rot);
 
   // ---- Invincibility rainbow outline (drawn under everything) ----
