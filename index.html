@@ -1276,6 +1276,13 @@ const Physics = {
           }
         }
       }
+      // Soft-lock left edge: wolf can't walk off-screen to the left.
+      // Camera never moves backward, so cameraX is also the world's leftmost
+      // visible column. Clamp the wolf's left-visual edge there.
+      if (p.x < State.cameraX) {
+        p.x = State.cameraX;
+        if (p.vx < 0) p.vx = 0;
+      }
     }
 
     // ---- Y axis ----
@@ -1642,6 +1649,10 @@ const Entities = {
     State.powerups = State.powerups.filter(pu => !pu.collected);
 
     // Enemies
+    // Capture falling state ONCE before the loop. The first stomp flips p.vy
+    // upward (bounce); without this, a second enemy under the same jump would
+    // see vy<=0 and fall through to "non-stomp contact" = unfair death.
+    const wasFalling = p.vy > 0;
     for (const e of State.enemies) {
       if (e.dead) continue;
       const r = { x: e.x + 4, y: e.y + 4, w: e.w - 8, h: e.h - 8 };
@@ -1658,8 +1669,13 @@ const Entities = {
         continue;
       }
 
-      const stomp = Physics.isStomp(p, e);
-      if (stomp) {
+      // Geometric stomp check: player bottom inside top quarter of enemy.
+      // Uses wasFalling captured above the loop so simultaneous stomps work.
+      const playerBottom = hb.y + hb.h;
+      const enemyTop = e.y;
+      const inStompZone = playerBottom >= enemyTop &&
+                         playerBottom <= enemyTop + e.h * CONFIG.STOMP_TOP_FRACTION + 8;
+      if (wasFalling && inStompZone) {
         this.killEnemyWithPoints(e);
         p.vy = CONFIG.JUMP_VELOCITY * CONFIG.STOMP_BOUNCE_FACTOR;
         continue;
@@ -1816,15 +1832,16 @@ function drawBackgroundFarLayer(ctx, cameraX) {
 }
 
 function drawBackgroundSea(ctx, cameraX) {
-  // Sea horizon now sits at the sand top so there's no blue band between
-  // sky and beach. Sea is visible only in pit columns (and below tiles).
-  const seaTop = 9 * CONFIG.TILE; // = 432
+  // A slim blue band sits above the sand: water at y=408, sand top at y=432.
+  // So roughly 24px of visible sea hugs the horizon, and pit columns reveal
+  // more water below the sand line.
+  const seaTop = 9 * CONFIG.TILE - 24; // = 408
   ctx.fillStyle = CONFIG.COLORS.sea;
   ctx.fillRect(0, seaTop, CONFIG.LOGICAL_W, CONFIG.LOGICAL_H - seaTop);
 
   // Animated lo-fi waves: a handful of sinusoidal lines drifting horizontally
-  // and undulating in place. They render in the sea region and get covered by
-  // sand tiles, so they're visible exactly where pits expose the water.
+  // and undulating in place. Above the sand line they read as the horizon;
+  // below the sand line they're only visible through pit columns.
   const t = State.time / 1000;
   ctx.strokeStyle = CONFIG.COLORS.seaHi;
   ctx.lineWidth = 2;
@@ -1832,13 +1849,13 @@ function drawBackgroundSea(ctx, cameraX) {
 
   const lines = 5;
   for (let i = 0; i < lines; i++) {
-    const baseY = seaTop + 14 + i * 16;
-    const amp = 2.5 + i * 0.6;
+    const baseY = seaTop + 6 + i * 7;
+    const amp = 1.8 + i * 0.5;
     const wavelength = 70 + i * 24;
     const phase = t * (0.45 + i * 0.08) + i * 0.9;
     const drift = (t * (14 + i * 4) + cameraX * 0.04) % wavelength;
 
-    ctx.globalAlpha = 0.34 - i * 0.05;
+    ctx.globalAlpha = 0.36 - i * 0.05;
     ctx.beginPath();
     for (let x = -wavelength; x <= CONFIG.LOGICAL_W + wavelength; x += 6) {
       const k = (x - drift) * (Math.PI * 2 / wavelength) + phase;
@@ -2217,12 +2234,12 @@ function drawWolf(ctx, x, y, state, frame, facing, timeMs) {
     visY += Math.sin(t * Math.PI * 2) * CONFIG.WOLF_IDLE_BOB_AMP;
   }
 
-  // Pivot around wolf center (cy shifted so legs end exactly at the hitbox bottom)
+  // Pivot around wolf center (cy shifted so legs end exactly at hitbox bottom)
   const cx = x + 24, cy = visY + 21;
   ctx.translate(cx, cy);
   ctx.scale(facing < 0 ? -scale : scale, scale);
 
-  // Tilt + dying spin
+  // Body tilt + dying spin
   let rot = 0;
   if (state === "jumpRise")      rot = -5 * Math.PI / 180;
   else if (state === "jumpFall") rot =  5 * Math.PI / 180;
@@ -2234,7 +2251,7 @@ function drawWolf(ctx, x, y, state, frame, facing, timeMs) {
   }
   ctx.rotate(rot);
 
-  // ---- Invincibility rainbow outline (drawn under the wolf) ----
+  // ---- Invincibility rainbow outline (drawn under everything) ----
   if (invincible) {
     const stripes = CONFIG.COLORS.rainbowStripes;
     const idx = Math.floor(((timeMs || 0) / 125) % stripes.length);
@@ -2242,122 +2259,272 @@ function drawWolf(ctx, x, y, state, frame, facing, timeMs) {
     ctx.lineWidth = 4;
     ctx.strokeStyle = stripes[idx];
     ctx.beginPath();
-    ctx.ellipse(0, 6, 22, 16, 0, 0, Math.PI * 2);     // body silhouette
+    ctx.ellipse(0, 7, 22, 15, 0, 0, Math.PI * 2);     // body silhouette
     ctx.stroke();
     ctx.beginPath();
-    ctx.ellipse(10, -6, 16, 13, 0, 0, Math.PI * 2);   // head silhouette
+    ctx.ellipse(13, -11, 13, 11, 0, 0, Math.PI * 2);  // head silhouette
     ctx.stroke();
     ctx.restore();
   }
 
-  // ---- Legs (drawn first so they're behind body) ----
-  let legXOffsets = [0, 0, 0, 0]; // back-pair (2), front-pair (2)
+  // ============================================================
+  // SCRAGGY TAIL (back of body, viewer-left when facing right)
+  // ============================================================
+  ctx.save();
+  ctx.translate(-17, 2);
+  ctx.rotate(-0.55);
+  ctx.fillStyle = C.wolfShadow;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 9, 5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = C.wolfBody;
+  ctx.beginPath();
+  ctx.ellipse(-1, -1, 7, 3.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // ============================================================
+  // LEGS (4 stiff uneven legs at varying angles)
+  // Run animation = per-leg rotation offset (steps look like steps,
+  // not slides). Two-tone: back legs darker for depth.
+  // ============================================================
+  let legRotOffsets = [0, 0, 0, 0];
   let legSplay = 0;
   if (state === "run") {
-    if (frame === 0)      { legXOffsets = [0,  0,  0, 0]; }
-    else if (frame === 1) { legXOffsets = [-3, -3, 3, 3]; }
-    else                  { legXOffsets = [2,  2, -2, -2]; }
-  } else if (state === "jumpRise" || state === "jumpFall") {
-    legSplay = state === "jumpRise" ? 3 : -1;
+    if (frame === 1)      legRotOffsets = [-0.35, -0.20, 0.30, 0.40];
+    else if (frame === 2) legRotOffsets = [ 0.30,  0.40,-0.35,-0.20];
+  } else if (state === "jumpRise") {
+    legSplay = 0.35;
+  } else if (state === "jumpFall") {
+    legSplay = -0.18;
   }
 
-  const legW = 5, legH = 9;
-  const legBaseY = 14;
-  const legXs = [-12, -6, 7, 13]; // back-back, back-front, front-back, front-front
-  ctx.fillStyle = C.wolfShadow;
+  // Per-leg config: x-anchor, height, base rotation, color
+  const legs = [
+    { x: -13, h: 10, rot: -0.20, color: C.wolfShadow },  // back-back
+    { x:  -6, h: 11, rot:  0.06, color: C.wolfBody  },   // back-front
+    { x:   5, h:  9, rot: -0.12, color: C.wolfShadow },  // front-back
+    { x:  12, h: 12, rot:  0.18, color: C.wolfBody  },   // front-front
+  ];
+
   for (let i = 0; i < 4; i++) {
-    const lx = legXs[i] + legXOffsets[i] + (i < 2 ? -legSplay : legSplay);
-    ctx.fillRect(lx - legW / 2, legBaseY, legW, legH);
+    const L = legs[i];
+    const splayDir = (i < 2 ? -1 : 1);
+    ctx.save();
+    ctx.translate(L.x, 14);
+    ctx.rotate(L.rot + legRotOffsets[i] + splayDir * legSplay);
+    ctx.fillStyle = L.color;
+    ctx.fillRect(-2, 0, 4, L.h);
+    // dark sock at the foot
+    ctx.fillStyle = "#3a3a3a";
+    ctx.fillRect(-2, L.h - 2, 4, 2);
+    ctx.restore();
   }
 
-  // ---- Body (pear-shape: bigger lower ellipse + smaller upper) ----
+  // ============================================================
+  // LUMPY POTATO BODY
+  // ============================================================
+  ctx.fillStyle = C.wolfBody;
+  // Main potato shape
+  ctx.beginPath();
+  ctx.ellipse(0, 7, 19, 13, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // Lumpy extra bulge on the back-top (asymmetric)
+  ctx.beginPath();
+  ctx.ellipse(-4, 1, 10, 7, -0.2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Inset belly shadow (botched taxidermy underside)
+  ctx.fillStyle = "rgba(0,0,0,0.18)";
+  ctx.beginPath();
+  ctx.ellipse(3, 14, 13, 4, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Off-white blotch patches
+  ctx.fillStyle = C.wolfBlotch;
+  ctx.beginPath(); ctx.ellipse(-7, 9, 5, 3, 0.3, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(6, 12, 4, 2.5, -0.2, 0, Math.PI * 2); ctx.fill();
+
+  // ============================================================
+  // DISLOCATED NECK (rotated up-and-forward from shoulder)
+  // ============================================================
+  ctx.save();
+  ctx.translate(7, 1);
+  ctx.rotate(-0.5); // ~-29°
+  ctx.fillStyle = C.wolfBody;
+  ctx.fillRect(-6, -14, 12, 16);
+  // Seam at the base (taxidermy stitch suggestion)
+  ctx.fillStyle = "rgba(0,0,0,0.22)";
+  ctx.fillRect(-6, 0, 12, 2);
+  ctx.restore();
+
+  // ============================================================
+  // MISSHAPEN HEAD (positioned at the top of the neck)
+  // ============================================================
+  ctx.save();
+  ctx.translate(13, -11);
+  ctx.rotate(-0.08); // slight forward tilt
+
+  // Asymmetric head ellipse
   ctx.fillStyle = C.wolfBody;
   ctx.beginPath();
-  ctx.ellipse(0, 6, 18, 12, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, 0, 13, 11, 0, 0, Math.PI * 2);
   ctx.fill();
+  // Lumpy bump on the back-top of the head
   ctx.beginPath();
-  ctx.ellipse(-2, -2, 13, 9, 0, 0, Math.PI * 2);
+  ctx.ellipse(-4, -5, 6, 5, -0.3, 0, Math.PI * 2);
   ctx.fill();
 
-  // Blotchy off-white patches
-  ctx.fillStyle = C.wolfBlotch;
-  ctx.beginPath(); ctx.ellipse(-6, 8, 5, 3, 0.3, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.ellipse(5,  10, 4, 2.5, -0.2, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.ellipse(-4, -1, 3, 2, 0.1, 0, Math.PI * 2); ctx.fill();
-
-  // ---- Head (too-large, leaned forward = +X) ----
-  ctx.fillStyle = C.wolfBody;
-  ctx.beginPath();
-  ctx.ellipse(10, -6, 16, 13, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Head blotch
-  ctx.fillStyle = C.wolfBlotch;
-  ctx.beginPath(); ctx.ellipse(8, -2, 4, 2, 0.4, 0, Math.PI * 2); ctx.fill();
-
-  // ---- Ears (one drooped) ----
+  // ----- EARS (asymmetric: upright with pink lining + folded over) -----
+  // Back ear: upright triangle, pink inner
   ctx.fillStyle = C.wolfShadow;
-  // Left ear (back) — upright triangle
   ctx.beginPath();
-  ctx.moveTo(2, -17);
-  ctx.lineTo(7, -12);
-  ctx.lineTo(0, -10);
-  ctx.closePath(); ctx.fill();
-  // Right ear (front) — drooped
+  ctx.moveTo(-7, -8);
+  ctx.lineTo(-4, -17);
+  ctx.lineTo(2, -9);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = C.wolfPink;
   ctx.beginPath();
-  ctx.moveTo(15, -16);
-  ctx.lineTo(22, -10);
-  ctx.lineTo(17, -7);
-  ctx.closePath(); ctx.fill();
-
-  // ---- Snout (off-center wedge) ----
-  ctx.fillStyle = C.wolfSnout;
-  ctx.beginPath();
-  ctx.moveTo(20, -5);
-  ctx.lineTo(28, -3);
-  ctx.lineTo(20, 1);
+  ctx.moveTo(-4.5, -9);
+  ctx.lineTo(-3, -14);
+  ctx.lineTo(0, -9);
   ctx.closePath();
   ctx.fill();
 
-  // ---- Eyes (googly, asymmetric) ----
-  // Eye whites
-  ctx.fillStyle = "#FFFFFF";
-  ctx.beginPath(); ctx.arc(6, -8, 5, 0, Math.PI * 2); ctx.fill();   // back eye
-  ctx.beginPath(); ctx.arc(15, -7, 4.5, 0, Math.PI * 2); ctx.fill(); // front eye
+  // Front ear: smaller, folded forward (drawn as a bent flap)
+  ctx.fillStyle = C.wolfShadow;
+  ctx.beginPath();
+  ctx.moveTo(5, -9);
+  ctx.lineTo(11, -6);
+  ctx.lineTo(8, -2);
+  ctx.lineTo(4, -5);
+  ctx.closePath();
+  ctx.fill();
 
-  // Pupils (asymmetric placement — the defining joke)
+  // ----- EYES (asymmetric, bulging) -----
+  // Big bulging eye
+  ctx.fillStyle = "#FFFFFF";
+  ctx.beginPath(); ctx.arc(0, -1, 5, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = C.textDark;
+  ctx.lineWidth = 0.7;
+  ctx.beginPath(); ctx.arc(0, -1, 5, 0, Math.PI * 2); ctx.stroke();
+  // Bloodshot tint
+  ctx.fillStyle = "rgba(255,170,170,0.25)";
+  ctx.beginPath(); ctx.arc(0, -1, 4.5, 0, Math.PI * 2); ctx.fill();
+
+  // Small eye, forward
+  ctx.fillStyle = "#FFEEEE";
+  ctx.beginPath(); ctx.arc(7, -2, 3, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = C.textDark;
+  ctx.lineWidth = 0.5;
+  ctx.beginPath(); ctx.arc(7, -2, 3, 0, Math.PI * 2); ctx.stroke();
+
+  // ----- PUPILS (looking in independent directions) -----
   if (state === "dying") {
-    // X_X eyes
     ctx.strokeStyle = C.textDark;
-    ctx.lineWidth = 1.6;
-    const drawX = (cx, cy, s) => {
+    ctx.lineWidth = 1.4;
+    const drawX = (px, py, s) => {
       ctx.beginPath();
-      ctx.moveTo(cx - s, cy - s); ctx.lineTo(cx + s, cy + s);
-      ctx.moveTo(cx + s, cy - s); ctx.lineTo(cx - s, cy + s);
+      ctx.moveTo(px - s, py - s); ctx.lineTo(px + s, py + s);
+      ctx.moveTo(px + s, py - s); ctx.lineTo(px - s, py + s);
       ctx.stroke();
     };
-    drawX(6, -8, 3);
-    drawX(15, -7, 2.8);
+    drawX(0, -1, 3);
+    drawX(7, -2, 2);
   } else {
-    ctx.fillStyle = C.textDark;
-    // Back eye pupil — looking up-left, larger
-    ctx.beginPath(); ctx.arc(4.4, -9.5, 2.2, 0, Math.PI * 2); ctx.fill();
-    // Front eye pupil — looking forward, smaller, slightly down
-    ctx.beginPath(); ctx.arc(16, -6, 1.6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#000";
+    // Big eye: pupil looking down-back (away from snout = stupid stare)
+    ctx.beginPath(); ctx.arc(-1.6, 0.8, 1.9, 0, Math.PI * 2); ctx.fill();
+    // Small eye: pupil looking up-forward
+    ctx.beginPath(); ctx.arc(8, -3, 1.2, 0, Math.PI * 2); ctx.fill();
   }
 
-  // ---- Mouth (tiny dumb open) ----
-  ctx.fillStyle = C.textDark;
+  // ============================================================
+  // CROOKED SNOUT (forward of head, slightly tilted down)
+  // ============================================================
+  ctx.save();
+  ctx.translate(7, 3);
+  ctx.rotate(0.22);
+
+  // Snout body
+  ctx.fillStyle = C.wolfSnout;
   ctx.beginPath();
-  ctx.ellipse(22, 2, 2.2, 1.6, 0, 0, Math.PI * 2);
+  ctx.ellipse(6, 0, 9, 5, 0, 0, Math.PI * 2);
   ctx.fill();
-  // Tongue dot
-  ctx.fillStyle = C.wolfPink;
+  // Bottom shadow (underbite suggestion)
+  ctx.fillStyle = "rgba(0,0,0,0.15)";
   ctx.beginPath();
-  ctx.arc(22.4, 2.6, 0.9, 0, Math.PI * 2);
+  ctx.ellipse(6, 2, 8, 2, 0, 0, Math.PI * 2);
   ctx.fill();
 
+  // Off-center black nose
+  ctx.fillStyle = "#111";
+  ctx.beginPath();
+  ctx.arc(13, -1.5, 2.3, 0, Math.PI * 2);
+  ctx.fill();
+  // Nose highlight
+  ctx.fillStyle = "rgba(255,255,255,0.4)";
+  ctx.beginPath();
+  ctx.arc(12.5, -2.2, 0.7, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Mouth gap (dark wedge underneath snout)
+  ctx.fillStyle = "#1a1410";
+  ctx.beginPath();
+  ctx.ellipse(5, 3, 5, 1.6, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Tooth 1: sticking down (jaggedly)
+  ctx.save();
+  ctx.translate(3.5, 3.2);
+  ctx.rotate(0.35);
+  ctx.fillStyle = "#fff5e6";
+  ctx.strokeStyle = "rgba(120,100,80,0.6)";
+  ctx.lineWidth = 0.4;
+  ctx.beginPath();
+  ctx.moveTo(-1.4, 0); ctx.lineTo(1.4, 0);
+  ctx.lineTo(0.6, 4.5); ctx.lineTo(-0.8, 4.5);
+  ctx.closePath();
+  ctx.fill(); ctx.stroke();
   ctx.restore();
+
+  // Tooth 2: sticking up & forward (small fang)
+  ctx.save();
+  ctx.translate(8, 2.5);
+  ctx.rotate(-0.25);
+  ctx.fillStyle = "#fff5e6";
+  ctx.strokeStyle = "rgba(120,100,80,0.6)";
+  ctx.lineWidth = 0.4;
+  ctx.beginPath();
+  ctx.moveTo(-0.9, 0); ctx.lineTo(0.9, 0);
+  ctx.lineTo(0.4, -3.5); ctx.lineTo(-0.6, -3.5);
+  ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  ctx.restore();
+
+  // Dead tongue (lolling out)
+  ctx.save();
+  ctx.translate(4, 4);
+  ctx.rotate(0.12);
+  ctx.fillStyle = C.wolfPink;
+  ctx.beginPath();
+  ctx.moveTo(-1.5, 0);
+  ctx.lineTo(1.5, 0);
+  ctx.lineTo(1.2, 5.5);
+  ctx.lineTo(-1.2, 5.5);
+  ctx.closePath();
+  ctx.fill();
+  // Tongue center line
+  ctx.fillStyle = "rgba(0,0,0,0.22)";
+  ctx.fillRect(-0.3, 0, 0.6, 5.5);
+  ctx.restore();
+
+  ctx.restore(); // end snout
+
+  ctx.restore(); // end head
+
+  ctx.restore(); // end wolf transform
 }
 
 // ============================================================
